@@ -14,8 +14,15 @@ import {
   Mic,
   GraduationCap,
   CheckCircle,
+  HelpCircle,
 } from 'lucide-react';
-import { toggleStaffPresence, getStaffActivePresence } from '../../db/database';
+import {
+  toggleStaffPresence,
+  getStaffActivePresence,
+  getGlobalAdminPresence,
+  subscribeStaffPresenceRealtime,
+  subscribeToDb,
+} from '../../db/database';
 
 export default function Navbar({
   stats,
@@ -28,40 +35,87 @@ export default function Navbar({
   setActiveTab,
   onOpenBarcodeScanner,
   onOpenVoiceSearch,
+  onOpenHelp,
+  onToast,
 }) {
   const overdueCount = stats?.overdueItemsCount || 0;
   const activeCount = stats?.activeTransactionsCount || 0;
   const insideCount = stats?.studentsInsideCount || 0;
 
   const isStudent = currentUser?.role === 'student';
+  const isStaff = currentUser?.role === 'staff';
   const isSir = currentUser?.role === 'sir';
+  const isAdmin =
+    currentUser?.role === 'admin' ||
+    (currentUser?.rollNumber && currentUser.rollNumber.toLowerCase() === 'admin' && !currentUser?.role);
   const isAdminOrSubstitute =
     currentUser?.role === 'admin' ||
     currentUser?.role === 'substitute_admin' ||
     currentUser?.role === 'sir' ||
-    !currentUser?.role;
+    (!currentUser?.role && !isStaff && !isStudent);
 
   const [staffInside, setStaffInside] = useState(false);
+  const [isTogglingPresence, setIsTogglingPresence] = useState(false);
+  const [adminPresence, setAdminPresence] = useState(() => getGlobalAdminPresence());
 
   useEffect(() => {
-    if ((currentUser?.role === 'sir' || currentUser?.role === 'admin') && currentUser) {
-      const active = getStaffActivePresence(currentUser.email);
+    if (isAdminOrSubstitute && currentUser) {
+      const active = getStaffActivePresence(currentUser);
       setStaffInside(Boolean(active));
     }
-  }, [currentUser]);
+    setAdminPresence(getGlobalAdminPresence());
+
+    const unsubscribe = subscribeToDb((event) => {
+      if (currentUser) {
+        const active = getStaffActivePresence(currentUser);
+        setStaffInside(Boolean(active));
+      }
+      if (
+        event === 'STAFF_PRESENCE_CHANGED' ||
+        event === 'DATABASE_SYNCED' ||
+        event === 'DATABASE_RESTORED' ||
+        event === 'AUTH_CHANGED'
+      ) {
+        setAdminPresence(getGlobalAdminPresence());
+      }
+    });
+
+    subscribeStaffPresenceRealtime();
+
+    const interval = setInterval(() => {
+      setAdminPresence(getGlobalAdminPresence());
+    }, 30000);
+
+    return () => {
+      if (typeof unsubscribe === 'function') unsubscribe();
+      clearInterval(interval);
+    };
+  }, [currentUser, isAdminOrSubstitute]);
 
   async function handleToggleStaffPresence() {
+    if (isTogglingPresence) return;
+    setIsTogglingPresence(true);
     try {
       const res = await toggleStaffPresence(currentUser);
       setStaffInside(res.isInside);
+      if (onToast) {
+        if (res.isInside) {
+          onToast(`Lab Entry recorded: ${res.record?.staffName || 'Admin'} is now inside the lab.`, 'success');
+        } else {
+          onToast(`Lab Exit recorded for ${res.record?.staffName || 'Admin'}. Time spent: ${res.record?.durationMinutes || 1} min.`, 'info');
+        }
+      }
     } catch (err) {
       console.error('Staff presence toggle failed:', err);
+      if (onToast) onToast('Failed to update presence: ' + err.message, 'error');
+    } finally {
+      setIsTogglingPresence(false);
     }
   }
 
   return (
     <header className="navbar">
-      <div className="navbar-brand">
+      <div className="navbar-brand" data-tour="navbar-brand">
         <button
           type="button"
           className="btn-icon mobile-menu-btn"
@@ -71,55 +125,75 @@ export default function Navbar({
         >
           <Menu size={22} />
         </button>
-        <div
-          style={{
-            background: 'linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%)',
-            color: '#fbbf24',
-            fontWeight: 900,
-            fontSize: '0.82rem',
-            padding: '0.35rem 0.6rem',
-            borderRadius: 'var(--radius-md)',
-            letterSpacing: '0.5px',
-            boxShadow: '0 2px 4px rgba(30, 58, 138, 0.25)',
-            border: '1px solid rgba(251, 191, 36, 0.4)',
-          }}
-        >
+        <div className="navbar-brand-badge">
           VRSEC
         </div>
-        <div>
+        <div className="navbar-brand-text">
           <h1 className="navbar-title">VRSEC Incubation Centre</h1>
           <p className="navbar-subtitle">Smart Lab Management System • Dept of ECE</p>
         </div>
       </div>
 
       {/* TWO MAIN APPLICATION TABS SWITCHER */}
-      <div className="main-tab-nav">
-        <button
-          type="button"
-          className={`main-tab-pill ${mainTab === 'control' ? 'active' : ''}`}
-          onClick={() => {
-            if (setMainTab) setMainTab('control');
-          }}
-          title="Tab 1: Lab Environmental & Device Controls"
-        >
-          <Sliders size={16} />
-          <span>Tab 1: Control</span>
-        </button>
+      <div className="main-tab-nav" data-tour="main-tab-nav">
+        {!isStaff && (
+          <button
+            type="button"
+            className={`main-tab-pill ${mainTab === 'control' || activeTab === 'control' ? 'active' : ''}`}
+            onClick={() => {
+              if (setMainTab) setMainTab('control');
+              if (setActiveTab) setActiveTab('control');
+            }}
+            data-tour="main-tab-control"
+            title={isStudent ? 'Tab 1: Lab Controls (Lights & Fans)' : 'Tab 1: Lab Environmental & Device Controls'}
+          >
+            <Sliders size={16} />
+            <span className="tab-full-label">{isStudent ? 'Tab 1: Lab Controls' : 'Tab 1: Control'}</span>
+            <span className="tab-short-label">Control</span>
+          </button>
+        )}
 
         <button
           type="button"
-          className={`main-tab-pill ${mainTab === 'management' ? 'active' : ''}`}
+          className={`main-tab-pill ${mainTab === 'management' && activeTab !== 'control' ? 'active' : ''}`}
           onClick={() => {
             if (setMainTab) setMainTab('management');
+            if (activeTab === 'control') {
+              if (setActiveTab) setActiveTab(isStudent ? 'student_portal' : 'dashboard');
+            }
           }}
-          title={isStudent ? 'Tab 2: My Personal Records & Portal' : 'Tab 2: Components & Lab Administration'}
+          data-tour="main-tab-management"
+          title={isStudent ? 'Tab 2: My Personal Records & Portal' : isStaff ? 'Tab 2: Lab Desk Management' : 'Tab 2: Components & Lab Administration'}
         >
           <Layers size={16} />
-          <span>{isStudent ? 'Tab 2: Student Portal' : 'Tab 2: Components / Lab Management'}</span>
+          <span className="tab-full-label">{isStudent ? 'Tab 2: Student Portal' : isStaff ? 'Tab 2: Desk Management' : 'Tab 2: Lab Management'}</span>
+          <span className="tab-short-label">{isStudent ? 'Portal' : 'Management'}</span>
         </button>
       </div>
 
       <div className="navbar-actions">
+        {/* Help & Interactive Guided Tours Button */}
+        {onOpenHelp && (
+          <button
+            type="button"
+            className="navbar-stat-pill"
+            style={{
+              background: '#eff6ff',
+              color: '#1d4ed8',
+              border: '1.5px solid #bfdbfe',
+              cursor: 'pointer',
+              fontWeight: 700,
+              boxShadow: '0 1px 2px rgba(29, 78, 216, 0.08)',
+            }}
+            onClick={onOpenHelp}
+            data-tour="navbar-help"
+            title="Open Help & Interactive Guided Tours"
+          >
+            <HelpCircle size={15} />
+            <span className="hide-on-compact">Help & Tours</span>
+          </button>
+        )}
+
         {/* Global Voice Search Button */}
         {onOpenVoiceSearch && (
           <button
@@ -133,32 +207,68 @@ export default function Navbar({
               fontWeight: 600,
             }}
             onClick={onOpenVoiceSearch}
+            data-tour="voice-search"
             title="Global Voice & Text Search across Students, Projects, Components & Domains"
           >
             <Mic size={15} />
-            <span>Voice Search</span>
+            <span className="hide-on-compact">Voice Search</span>
           </button>
         )}
 
-        {/* Sir / Staff "I'm Inside Lab" One-Click Toggle */}
-        {(currentUser?.role === 'sir' || currentUser?.role === 'admin') && (
+        {/* Sir / Staff "I'm Inside Lab" One-Click Presence Button */}
+        {(isAdminOrSubstitute || isStaff) && (
           <button
             type="button"
             className="navbar-stat-pill"
             style={{
               background: staffInside ? '#ecfdf5' : '#f8fafc',
               color: staffInside ? '#065f46' : 'var(--neutral-700)',
-              border: `1px solid ${staffInside ? '#10b981' : 'var(--neutral-300)'}`,
-              cursor: 'pointer',
+              border: `1.5px solid ${staffInside ? '#10b981' : 'var(--neutral-300)'}`,
+              cursor: isTogglingPresence ? 'wait' : 'pointer',
               fontWeight: 700,
+              flexShrink: 0,
+              opacity: isTogglingPresence ? 0.75 : 1,
+              boxShadow: staffInside ? '0 1px 3px rgba(16, 185, 129, 0.2)' : '0 1px 2px rgba(0, 0, 0, 0.04)',
+              transition: 'all 0.15s ease',
             }}
             onClick={handleToggleStaffPresence}
-            title={staffInside ? "Click to record your Lab Exit" : "Click to record your Lab Entry without barcode"}
+            disabled={isTogglingPresence}
+            title={
+              isTogglingPresence
+                ? "Recording presence..."
+                : staffInside
+                ? "You are currently INSIDE the lab. Click to record your Lab Exit."
+                : "You are currently OUTSIDE the lab. Click to record your Lab Entry."
+            }
           >
-            {staffInside ? (
+            {isTogglingPresence ? (
               <>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />
-                <span>Sir Inside (Exit)</span>
+                <span
+                  style={{
+                    width: 12,
+                    height: 12,
+                    border: '2px solid currentColor',
+                    borderTopColor: 'transparent',
+                    borderRadius: '50%',
+                    display: 'inline-block',
+                    animation: 'spin 0.6s linear infinite',
+                  }}
+                />
+                <span>Updating...</span>
+              </>
+            ) : staffInside ? (
+              <>
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    background: '#10b981',
+                    display: 'inline-block',
+                    boxShadow: '0 0 0 2px rgba(16, 185, 129, 0.3)',
+                  }}
+                />
+                <span>{currentUser?.role === 'sir' ? 'Sir Inside' : 'Inside Lab'}</span>
               </>
             ) : (
               <>
@@ -178,6 +288,7 @@ export default function Navbar({
               background: insideCount > 0 ? '#ecfdf5' : 'var(--neutral-100)',
               color: insideCount > 0 ? '#065f46' : 'var(--neutral-600)',
               border: `1px solid ${insideCount > 0 ? '#a7f3d0' : 'var(--neutral-200)'}`,
+              flexShrink: 0,
             }}
             onClick={() => {
               if (setMainTab) setMainTab('management');
@@ -186,78 +297,46 @@ export default function Navbar({
             title="View Students Currently Inside the Lab"
           >
             <Users size={15} />
-            <span>{insideCount} Inside Lab</span>
+            <span>{insideCount} Inside</span>
           </button>
         )}
+      </div>
 
-        {/* Scan Student ID Barcode Button */}
-        {isAdminOrSubstitute && onOpenBarcodeScanner && (
-          <button
-            type="button"
-            className="navbar-stat-pill"
-            style={{
-              background: '#eff6ff',
-              color: '#1d4ed8',
-              border: '1px solid #bfdbfe',
-              cursor: 'pointer',
-              fontWeight: 600,
-            }}
-            onClick={onOpenBarcodeScanner}
-            title="Scan Student ID Card Barcode / QR Code"
+      {/* USER ACCOUNT & LOGOUT (ALWAYS ANCHORED AT FAR RIGHT, NEVER CLIPPED) */}
+      <div className="navbar-user-section">
+        {/* Global Admin Presence Indicator (Visible to every authorized portal EXCEPT Admin) */}
+        {!isAdmin && (
+          <div
+            className="global-admin-presence-indicator"
+            aria-label={adminPresence.tooltipText || (adminPresence.isInside ? `${adminPresence.adminName} is in the lab` : `${adminPresence.adminName} is outside the lab`)}
+            data-testid="global-admin-presence"
+            data-inside={adminPresence.isInside ? 'true' : 'false'}
+            role="status"
           >
-            <ScanLine size={15} />
-            <span>Scan ID Card</span>
-          </button>
-        )}
-
-        {/* Active Issues Counter (Admin/Sub-Admin) */}
-        {isAdminOrSubstitute && (
-          <button
-            type="button"
-            className="navbar-stat-pill pill-active"
-            onClick={() => {
-              if (setMainTab) setMainTab('management');
-              if (setActiveTab) setActiveTab('transactions');
-            }}
-            title="View Active Transactions"
-          >
-            <PackageCheck size={16} />
-            <span>{activeCount} Active</span>
-          </button>
-        )}
-
-        {/* Overdue Alert Pill (Admin/Sub-Admin) */}
-        {isAdminOrSubstitute && (
-          overdueCount > 0 ? (
-            <button
-              type="button"
-              className="navbar-stat-pill pill-overdue"
-              onClick={() => {
-                if (setMainTab) setMainTab('management');
-                if (setActiveTab) setActiveTab('overdue');
-              }}
-              title="View Overdue Items"
-            >
-              <AlertTriangle size={16} />
-              <span>{overdueCount} Overdue</span>
-            </button>
-          ) : (
-            <div
-              className="navbar-stat-pill"
+            <span
+              className="presence-dot"
               style={{
-                background: 'var(--success-light)',
-                color: 'var(--success-text)',
-                border: '1px solid var(--success-border)',
+                backgroundColor: adminPresence.isInside ? '#10b981' : '#ef4444',
+                boxShadow: adminPresence.isInside
+                  ? '0 0 0 2px rgba(16, 185, 129, 0.25), 0 0 6px rgba(16, 185, 129, 0.4)'
+                  : '0 0 0 2px rgba(239, 68, 68, 0.25), 0 0 6px rgba(239, 68, 68, 0.4)',
               }}
-            >
-              <span>✓ No Overdues</span>
+            />
+            <span className="presence-text">
+              {adminPresence.visibleText || (adminPresence.isInside ? 'Admin is in lab' : 'Admin is outside the lab')}
+            </span>
+            <div className="presence-tooltip" role="tooltip">
+              {adminPresence.tooltipText || (adminPresence.isInside
+                ? `${adminPresence.adminName} is in the lab`
+                : `${adminPresence.adminName} is outside the lab`)}
             </div>
-          )
+          </div>
         )}
 
         {/* User Role Badge */}
         <div
           className="user-role-badge"
+          data-tour="user-profile"
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -266,6 +345,8 @@ export default function Navbar({
             borderRadius: 999,
             fontSize: '0.78rem',
             fontWeight: 700,
+            whiteSpace: 'nowrap',
+            flexShrink: 0,
             background:
               currentUser?.role === 'admin'
                 ? '#e0e7ff'
@@ -299,22 +380,22 @@ export default function Navbar({
             {currentUser?.role === 'admin'
               ? 'Admin'
               : currentUser?.role === 'sir'
-              ? 'Faculty / Sir'
+              ? 'Sir'
               : currentUser?.role === 'substitute_admin'
-              ? 'Substitute Admin'
+              ? 'Sub Admin'
               : currentUser?.rollNumber || 'Student'}
           </span>
         </div>
 
-        {/* Logout Button */}
+        {/* Clear, Prominent Logout Button */}
         <button
           type="button"
-          className="btn-icon"
+          className="navbar-logout-btn"
           onClick={onLogout}
-          title="Sign Out"
-          style={{ marginLeft: '0.35rem' }}
+          title="Sign Out / Logout of Incubation CMS"
         >
-          <LogOut size={18} />
+          <LogOut size={15} />
+          <span className="logout-text">Logout</span>
         </button>
       </div>
 
@@ -322,24 +403,26 @@ export default function Navbar({
         .main-tab-nav {
           display: flex;
           align-items: center;
-          gap: 0.5rem;
+          gap: 0.35rem;
           background: var(--neutral-100);
-          padding: 0.25rem;
+          padding: 0.2rem 0.35rem;
           border-radius: var(--radius-lg);
           border: 1px solid var(--neutral-200);
+          flex-shrink: 0;
         }
         .main-tab-pill {
           display: inline-flex;
           align-items: center;
-          gap: 0.45rem;
-          padding: 0.4rem 0.85rem;
+          gap: 0.4rem;
+          padding: 0.35rem 0.75rem;
           border-radius: var(--radius-md);
-          font-size: 0.82rem;
+          font-size: 0.8rem;
           font-weight: 700;
           color: var(--neutral-600);
           background: transparent;
           border: none;
           cursor: pointer;
+          white-space: nowrap;
           transition: all 0.15s ease;
         }
         .main-tab-pill:hover {
@@ -350,12 +433,77 @@ export default function Navbar({
           color: var(--primary);
           box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
         }
+        .global-admin-presence-indicator {
+          position: relative;
+          display: inline-flex;
+          align-items: center;
+          gap: 0.45rem;
+          padding: 0.28rem 0.65rem;
+          border-radius: 9999px;
+          font-size: 0.78rem;
+          font-weight: 600;
+          cursor: pointer;
+          margin-right: 0.35rem;
+          user-select: none;
+          background: #f8fafc;
+          border: 1.5px solid var(--neutral-200);
+          white-space: nowrap;
+          flex-shrink: 0;
+          transition: all 0.2s ease;
+        }
+        .global-admin-presence-indicator[data-inside="true"] {
+          background: #ecfdf5;
+          border-color: #a7f3d0;
+          color: #065f46;
+        }
+        .global-admin-presence-indicator[data-inside="false"] {
+          background: #fef2f2;
+          border-color: #fecaca;
+          color: #991b1b;
+        }
+        .global-admin-presence-indicator .presence-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          display: inline-block;
+          flex-shrink: 0;
+          transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.25s ease;
+        }
+        .global-admin-presence-indicator:hover .presence-dot {
+          transform: scale(1.3);
+        }
+        .global-admin-presence-indicator .presence-text {
+          font-weight: 700;
+          letter-spacing: -0.2px;
+          font-size: 0.76rem;
+        }
+        .global-admin-presence-indicator .presence-tooltip {
+          visibility: hidden;
+          opacity: 0;
+          position: absolute;
+          top: calc(100% + 6px);
+          right: 0;
+          background: #000000;
+          color: #ffffff;
+          font-size: 0.76rem;
+          font-weight: 600;
+          line-height: 1.35;
+          padding: 0.45rem 0.75rem;
+          border-radius: 6px;
+          white-space: nowrap;
+          pointer-events: none;
+          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          transition: opacity 0.15s ease, visibility 0.15s ease;
+          z-index: 999999;
+        }
+        .global-admin-presence-indicator:hover .presence-tooltip {
+          visibility: visible;
+          opacity: 1;
+        }
         @media (max-width: 900px) {
           .mobile-menu-btn {
             display: inline-flex !important;
-          }
-          .navbar-subtitle {
-            display: none;
           }
           .main-tab-nav {
             margin: 0 auto;

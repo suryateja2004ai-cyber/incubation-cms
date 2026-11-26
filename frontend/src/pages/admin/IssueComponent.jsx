@@ -19,6 +19,7 @@ import {
   PackageCheck,
   ChevronRight,
   Info,
+  Database,
 } from 'lucide-react';
 import {
   getComponents,
@@ -27,11 +28,15 @@ import {
   getActiveAuthorizationsForStudent,
   getDelegationsForDelegate,
   getSettings,
+  getCategories,
   subscribeToDb,
 } from '../../db/database';
+import { formatDisplayDate, formatDisplayDateTime } from '../../utils/dateFormatter';
+import CategoryBreadcrumb from '../../utils/categoryHelper.jsx';
 
-export default function IssueComponent({ onOpenOcrModal, scannedStudent, onClearScannedStudent, onToast, setActiveTab }) {
+export default function IssueComponent({ currentUser, onOpenOcrModal, scannedStudent, onClearScannedStudent, onToast, setActiveTab }) {
   const [componentsList, setComponentsList] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [settings, setSettings] = useState({ defaultOverdueDays: 7 });
 
   // Student details
@@ -67,6 +72,7 @@ export default function IssueComponent({ onOpenOcrModal, scannedStudent, onClear
   function loadData() {
     const comps = getComponents();
     setComponentsList(comps);
+    setCategories(getCategories());
     const setts = getSettings();
     setSettings(setts);
     setDefaultDuration(setts.defaultOverdueDays || 7);
@@ -89,7 +95,7 @@ export default function IssueComponent({ onOpenOcrModal, scannedStudent, onClear
     if (existing) {
       if (!studentName) setStudentName(existing.name);
       setStudentDept(existing.department || '');
-      setStudentPhone(existing.phone || '');
+      setStudentPhone(existing.mobileNumber || existing.phone || '');
     }
 
     // Check delegations
@@ -205,14 +211,23 @@ export default function IssueComponent({ onOpenOcrModal, scannedStudent, onClear
   }
 
   // Issue transaction submission
-  function handleSubmitIssue(e) {
+  async function handleSubmitIssue(e) {
     e.preventDefault();
     setErrorMessage('');
 
     try {
-      if (!studentRoll.trim()) throw new Error('Student Roll Number is required.');
+      const cleanRoll = studentRoll.trim().toUpperCase();
+      if (!cleanRoll) throw new Error('Student Roll Number is required.');
       if (!studentName.trim()) throw new Error('Student Name is required.');
       if (cart.length === 0) throw new Error('Please select at least one component to issue.');
+
+      const cleanPhone = studentPhone.trim().replace(/[\s\-()]/g, '');
+      if (!cleanPhone) {
+        throw new Error('Contact Phone is mandatory for issuing components.');
+      }
+      if (!/^\+?[0-9]{10,14}$/.test(cleanPhone)) {
+        throw new Error('Please enter a valid phone number (at least 10 digits).');
+      }
 
       // Validate all cart items
       for (const item of cart) {
@@ -234,22 +249,24 @@ export default function IssueComponent({ onOpenOcrModal, scannedStudent, onClear
       }
 
       const issuePayload = {
-        studentRoll: studentRoll.trim().toUpperCase(),
+        studentRoll: cleanRoll,
         studentName: studentName.trim(),
         studentDept,
-        studentPhone,
+        phone: cleanPhone,
         authorizedBy: authorizedBy ? authorizedBy.trim() : null,
         defaultOverdueDays: defaultDuration,
         notes: issueNotes,
         items: cart.map((it) => ({
           componentId: it.component.id,
           quantity: it.quantity,
-          individualIds: it.selectedIndividualIds,
+          individualIds: it.selectedIndividualIds || [],
+          selectedIndividualIds: it.selectedIndividualIds || [],
           dueDays: it.dueDays,
         })),
+        actor: currentUser,
       };
 
-      const txn = issueComponents(issuePayload);
+      const txn = await issueComponents(issuePayload);
       setSuccessReceipt(txn);
       setCart([]);
       setIssueNotes('');
@@ -294,12 +311,14 @@ export default function IssueComponent({ onOpenOcrModal, scannedStudent, onClear
             Issue Components
           </h2>
           <p className="text-muted" style={{ fontSize: '0.9rem' }}>
-            Identify student via camera OCR, select components & physical IDs, and record borrow transaction
+            Select components & physical IDs, and record borrow transaction
           </p>
         </div>
-        <button type="button" className="btn btn-secondary" onClick={onOpenOcrModal}>
-          <Camera size={18} /> Open Camera OCR
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <span className="badge badge-success" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.4rem 0.75rem', fontSize: '0.8rem' }}>
+            <Database size={14} /> PostgreSQL Connected (incubation_cms)
+          </span>
+        </div>
       </div>
 
       {/* SUCCESS CONFIRMATION RECEIPT */}
@@ -312,9 +331,14 @@ export default function IssueComponent({ onOpenOcrModal, scannedStudent, onClear
                 <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#14532d' }}>
                   Components Issued Successfully!
                 </h3>
-                <span className="font-mono text-sm" style={{ color: '#166534' }}>
-                  Receipt ID: {successReceipt.id}
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.2rem', flexWrap: 'wrap' }}>
+                  <span className="font-mono text-sm" style={{ color: '#166534' }}>
+                    Receipt ID: {successReceipt.id}
+                  </span>
+                  <span className="badge badge-success" style={{ fontSize: '0.7rem' }}>
+                    Saved in PostgreSQL (public.issued_components)
+                  </span>
+                </div>
               </div>
             </div>
             <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -345,10 +369,10 @@ export default function IssueComponent({ onOpenOcrModal, scannedStudent, onClear
               <div>
                 <span className="text-muted text-xs">LOAN DETAILS:</span>
                 <div style={{ fontSize: '0.9rem' }}>
-                  Issue Date: <strong>{new Date(successReceipt.issueDate).toLocaleString()}</strong>
+                  Issue Date: <strong>{formatDisplayDateTime(successReceipt.issueDate)}</strong>
                 </div>
                 <div style={{ fontSize: '0.9rem', color: 'var(--primary)' }}>
-                  Overall Due Date: <strong>{new Date(successReceipt.overallDueDate).toLocaleDateString()}</strong>
+                  Overall Due Date: <strong>{formatDisplayDate(successReceipt.overallDueDate)}</strong>
                 </div>
               </div>
             </div>
@@ -367,7 +391,10 @@ export default function IssueComponent({ onOpenOcrModal, scannedStudent, onClear
                 <tbody>
                   {successReceipt.items.map((it) => (
                     <tr key={it.componentId}>
-                      <td style={{ fontWeight: 600 }}>{it.componentName}</td>
+                      <td style={{ fontWeight: 600 }}>
+                        <div>{it.componentName}</div>
+                        <CategoryBreadcrumb component={it} categories={categories} fontSize="0.75rem" />
+                      </td>
                       <td>{it.issuedQuantity} unit(s)</td>
                       <td>
                         {it.individualIds && it.individualIds.length > 0 ? (
@@ -380,7 +407,7 @@ export default function IssueComponent({ onOpenOcrModal, scannedStudent, onClear
                           <span className="text-muted">Bulk / Aggregate</span>
                         )}
                       </td>
-                      <td style={{ fontWeight: 600 }}>{new Date(it.dueDate).toLocaleDateString()} ({it.dueDays} days)</td>
+                      <td style={{ fontWeight: 600 }}>{formatDisplayDate(it.dueDate)} ({it.dueDays} days)</td>
                     </tr>
                   ))}
                 </tbody>
@@ -400,9 +427,6 @@ export default function IssueComponent({ onOpenOcrModal, scannedStudent, onClear
               <h3 className="card-title">
                 <User size={18} /> Student Identification
               </h3>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={onOpenOcrModal}>
-                <Camera size={14} /> Scan ID Card
-              </button>
             </div>
             <div className="card-body">
               {errorMessage && (
@@ -420,21 +444,14 @@ export default function IssueComponent({ onOpenOcrModal, scannedStudent, onClear
                   <input
                     type="text"
                     className="input-field uppercase-input"
+                    data-tour="issue-roll-input"
                     placeholder="e.g. 238W1A0477"
                     value={studentRoll}
                     onChange={(e) => handleRollChange(e.target.value)}
                     required
                   />
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    onClick={onOpenOcrModal}
-                    title="Open Camera OCR"
-                  >
-                    <Camera size={18} />
-                  </button>
                 </div>
-                <span className="input-hint">Capture ID card via camera OCR or type manually</span>
+                <span className="input-hint">Enter student roll number</span>
               </div>
 
               <div className="form-group">
@@ -444,6 +461,7 @@ export default function IssueComponent({ onOpenOcrModal, scannedStudent, onClear
                 <input
                   type="text"
                   className="input-field"
+                  data-tour="issue-name-input"
                   placeholder="e.g. Anwar Bajarinti"
                   value={studentName}
                   onChange={(e) => setStudentName(e.target.value)}
@@ -463,14 +481,18 @@ export default function IssueComponent({ onOpenOcrModal, scannedStudent, onClear
                   />
                 </div>
                 <div className="form-group">
-                  <label className="input-label">Contact Phone</label>
+                  <label className="input-label">
+                    Contact Phone <span className="required-star">*</span>
+                  </label>
                   <input
-                    type="text"
+                    type="tel"
                     className="input-field"
-                    placeholder="e.g. +91 98765 43210"
+                    placeholder="e.g. 9876543210"
                     value={studentPhone}
                     onChange={(e) => setStudentPhone(e.target.value)}
+                    required
                   />
+                  <span className="input-hint">Mandatory for issuing components. Automatically saves to student account.</span>
                 </div>
               </div>
 
@@ -538,7 +560,7 @@ export default function IssueComponent({ onOpenOcrModal, scannedStudent, onClear
           </div>
 
           {/* Issue Cart & Overdue Config */}
-          <div className="card">
+          <div className="card" data-tour="issue-cart-section">
             <div className="card-header">
               <h3 className="card-title">
                 <ShoppingCart size={18} /> Selected Components Cart ({cart.length})
@@ -580,8 +602,9 @@ export default function IssueComponent({ onOpenOcrModal, scannedStudent, onClear
                             <strong style={{ fontSize: '0.92rem', color: 'var(--neutral-900)' }}>
                               {item.component.name}
                             </strong>
-                            <div className="text-xs text-muted">
-                              {item.component.category} • Max available: {item.component.availableQuantity}
+                            <div className="text-xs text-muted" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap', marginTop: '0.2rem' }}>
+                              <CategoryBreadcrumb component={item.component} categories={categories} fontSize="0.75rem" />
+                              <span>• Max available: {item.component.availableQuantity}</span>
                             </div>
                           </div>
                           <button
@@ -671,6 +694,7 @@ export default function IssueComponent({ onOpenOcrModal, scannedStudent, onClear
                   <button
                     type="button"
                     className="btn btn-primary btn-lg"
+                    data-tour="issue-submit-btn"
                     style={{ width: '100%', marginTop: '0.5rem' }}
                     onClick={handleSubmitIssue}
                     disabled={cart.length === 0 || !studentRoll || !studentName}
@@ -700,6 +724,7 @@ export default function IssueComponent({ onOpenOcrModal, scannedStudent, onClear
                 <input
                   type="text"
                   className="input-field search-input"
+                  data-tour="issue-catalog-search"
                   placeholder="Filter catalog by component name or category..."
                   value={searchComponentQuery}
                   onChange={(e) => setSearchComponentQuery(e.target.value)}
@@ -716,6 +741,7 @@ export default function IssueComponent({ onOpenOcrModal, scannedStudent, onClear
                 return (
                   <div
                     key={comp.id}
+                    data-tour="issue-catalog-card"
                     style={{
                       border: '1px solid var(--neutral-200)',
                       borderRadius: 'var(--radius-md)',
@@ -731,8 +757,9 @@ export default function IssueComponent({ onOpenOcrModal, scannedStudent, onClear
                       <div style={{ fontWeight: 700, fontSize: '0.92rem', color: 'var(--neutral-900)' }}>
                         {comp.name}
                       </div>
-                      <div className="text-xs text-muted" style={{ marginTop: '0.2rem' }}>
-                        {comp.category} • Location: {comp.location || 'Main Storage'}
+                      <div className="text-xs text-muted" style={{ marginTop: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+                        <CategoryBreadcrumb component={comp} categories={categories} fontSize="0.75rem" />
+                        <span>• Location: {comp.location || 'Main Storage'}</span>
                       </div>
                       <div style={{ marginTop: '0.35rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                         <span className={`badge ${comp.availableQuantity > 0 ? 'badge-success' : 'badge-danger'}`}>

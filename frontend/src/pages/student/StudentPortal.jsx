@@ -29,19 +29,32 @@ import {
   ExternalLink,
   Plus,
   Palette,
+  Megaphone,
+  Bot,
+  Rocket,
+  Sparkles,
+  Award,
+  GraduationCap,
 } from 'lucide-react';
 import {
   getStudentPersonalStats,
   createSelfReflection,
   createComplaint,
   updateProject,
+  getCategories,
   subscribeToDb,
 } from '../../db/database';
+import AppInstallQrCard from '../../components/common/AppInstallQrCard';
+import { formatDisplayDate } from '../../utils/dateFormatter';
+import CategoryBreadcrumb from '../../utils/categoryHelper.jsx';
+import { generateGoogleCalendarUrl, downloadIcsFile } from '../../utils/calendarExport';
 
 export default function StudentPortal({ currentUser, onToast }) {
   const [stats, setStats] = useState(null);
-  const [portalTab, setPortalTab] = useState('overview'); // 'overview', 'projects', 'achievements', 'papers', 'self_book', 'complaint', 'apk'
+  const [categories, setCategories] = useState([]);
+  const [portalTab, setPortalTab] = useState('overview'); // 'overview', 'announcements_events', 'projects', 'achievements', 'papers', 'self_book', 'complaint', 'apk'
   const [avatarTheme, setAvatarTheme] = useState('indigo');
+  const [avatarType, setAvatarType] = useState('initials'); // 'initials', 'robot', 'rocket', 'chip', 'scholar'
 
   // Self reflection state
   const [newRefTitle, setNewRefTitle] = useState('');
@@ -67,6 +80,7 @@ export default function StudentPortal({ currentUser, onToast }) {
     if (!currentUser?.rollNumber) return;
     const personal = getStudentPersonalStats(currentUser.rollNumber);
     setStats(personal);
+    setCategories(getCategories());
     if (personal?.avatarTheme) {
       setAvatarTheme(personal.avatarTheme);
     }
@@ -133,15 +147,26 @@ export default function StudentPortal({ currentUser, onToast }) {
     }
   }
 
-  if (!stats) return <div className="card-body">Loading your personal student records...</div>;
+  if (!stats) {
+    return (
+      <div className="card" style={{ padding: '3.5rem 2rem', textAlign: 'center', maxWidth: '580px', margin: '2.5rem auto' }}>
+        <div className="spinner-large" style={{ margin: '0 auto 1.25rem' }}></div>
+        <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--neutral-900)', marginBottom: '0.5rem' }}>
+          Loading Student Portal...
+        </h3>
+        <p className="text-muted text-sm">Synchronizing personal attendance, projects, and component records.</p>
+      </div>
+    );
+  }
 
-  // Initials generator
-  const initials = (stats.student.name || 'Student')
+  // Safe initials generator with fallback to currentUser or 'Student'
+  const studentName = stats?.student?.name || currentUser?.name || 'Student';
+  const initials = studentName
     .split(' ')
     .filter(Boolean)
     .slice(0, 2)
     .map((n) => n[0].toUpperCase())
-    .join('');
+    .join('') || 'ST';
 
   // Theme palettes
   const THEMES = {
@@ -170,7 +195,7 @@ export default function StudentPortal({ currentUser, onToast }) {
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1.25rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap' }}>
-            {/* Customizable Initials Avatar Badge */}
+            {/* Customizable Avatar Badge (Initials or SVG Illustration) */}
             <div
               style={{
                 width: 68,
@@ -188,7 +213,17 @@ export default function StudentPortal({ currentUser, onToast }) {
                 flexShrink: 0,
               }}
             >
-              {initials}
+              {avatarType === 'robot' ? (
+                <Bot size={34} />
+              ) : avatarType === 'rocket' ? (
+                <Rocket size={34} />
+              ) : avatarType === 'chip' ? (
+                <Cpu size={34} />
+              ) : avatarType === 'scholar' ? (
+                <GraduationCap size={34} />
+              ) : (
+                initials
+              )}
             </div>
 
             <div>
@@ -208,6 +243,36 @@ export default function StudentPortal({ currentUser, onToast }) {
                 >
                   {stats.branch || 'ECE'} • Sec {stats.section || 'A'} • Year {stats.year || 3}
                 </span>
+                {stats.student.faceRegistered ? (
+                  <span
+                    style={{
+                      background: '#ecfdf5',
+                      color: '#065f46',
+                      border: '1px solid #a7f3d0',
+                      fontSize: '0.74rem',
+                      fontWeight: 800,
+                      padding: '0.2rem 0.6rem',
+                      borderRadius: 999,
+                    }}
+                    title="Face biometric template is active in local recognition system"
+                  >
+                    Face Enrolled
+                  </span>
+                ) : (
+                  <span
+                    style={{
+                      background: '#f1f5f9',
+                      color: '#64748b',
+                      fontSize: '0.74rem',
+                      fontWeight: 800,
+                      padding: '0.2rem 0.6rem',
+                      borderRadius: 999,
+                    }}
+                    title="Contact Admin or Sir to enroll face biometrics"
+                  >
+                    No Face Enrolled
+                  </span>
+                )}
               </div>
               <p className="text-muted" style={{ fontSize: '0.88rem', marginTop: '0.25rem' }}>
                 Roll Number: <strong className="font-mono text-primary">{stats.student.rollNumber}</strong> • VRSEC Incubation Scholar
@@ -217,26 +282,64 @@ export default function StudentPortal({ currentUser, onToast }) {
 
           {/* Live Presence Pill & Theme Picker */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-            {/* Avatar Theme Color Buttons */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', background: '#f1f5f9', padding: '0.25rem 0.5rem', borderRadius: 999 }}>
-              <Palette size={14} className="text-muted" />
-              {Object.keys(THEMES).map((thKey) => (
-                <button
-                  key={thKey}
-                  type="button"
-                  onClick={() => setAvatarTheme(thKey)}
-                  style={{
-                    width: 16,
-                    height: 16,
-                    borderRadius: '50%',
-                    background: THEMES[thKey].bg,
-                    border: avatarTheme === thKey ? '2px solid #000' : 'none',
-                    cursor: 'pointer',
-                    padding: 0,
-                  }}
-                  title={`Select ${thKey} theme`}
-                />
-              ))}
+            {/* Avatar Theme Color & SVG Style Pickers */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+              {/* Palette Color Picker */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', background: '#f1f5f9', padding: '0.25rem 0.5rem', borderRadius: 999 }}>
+                <Palette size={14} className="text-muted" />
+                {Object.keys(THEMES).map((thKey) => (
+                  <button
+                    key={thKey}
+                    type="button"
+                    onClick={() => setAvatarTheme(thKey)}
+                    style={{
+                      width: 16,
+                      height: 16,
+                      borderRadius: '50%',
+                      background: THEMES[thKey].bg,
+                      border: avatarTheme === thKey ? '2px solid #000' : 'none',
+                      cursor: 'pointer',
+                      padding: 0,
+                    }}
+                    title={`Select ${thKey} theme`}
+                  />
+                ))}
+              </div>
+
+              {/* Inline SVG Avatar Style Picker */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', background: '#f1f5f9', padding: '0.25rem 0.45rem', borderRadius: 999 }}>
+                {[
+                  { id: 'initials', label: 'Initials', icon: null },
+                  { id: 'robot', label: 'Robot AI', icon: Bot },
+                  { id: 'rocket', label: 'Rocket', icon: Rocket },
+                  { id: 'chip', label: 'Hardware Chip', icon: Cpu },
+                  { id: 'scholar', label: 'Scholar Cap', icon: GraduationCap },
+                ].map((av) => (
+                  <button
+                    key={av.id}
+                    type="button"
+                    onClick={() => setAvatarType(av.id)}
+                    style={{
+                      background: avatarType === av.id ? 'var(--neutral-900)' : 'transparent',
+                      color: avatarType === av.id ? '#fff' : 'var(--neutral-600)',
+                      border: 'none',
+                      borderRadius: '50%',
+                      width: 20,
+                      height: 20,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '0.65rem',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      padding: 0,
+                    }}
+                    title={`Avatar: ${av.label}`}
+                  >
+                    {av.icon ? <av.icon size={12} /> : 'Aa'}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Presence status */}
@@ -261,6 +364,70 @@ export default function StudentPortal({ currentUser, onToast }) {
         </div>
       </div>
 
+      {/* ACTIVE LAB ANNOUNCEMENTS BANNER */}
+      {stats.announcements && stats.announcements.length > 0 && (
+        <div style={{ marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+          {stats.announcements.map((ann) => {
+            const daysLeft = Math.max(1, Math.ceil((new Date(ann.expiresAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000)));
+            return (
+              <div
+                key={ann.id}
+                className="alert alert-info"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: '0.75rem',
+                  background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
+                  border: '1px solid #93c5fd',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '0.85rem 1.25rem',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <Megaphone size={20} className="text-primary" style={{ flexShrink: 0 }} />
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <span className="badge badge-primary" style={{ fontSize: '0.7rem' }}>{ann.category}</span>
+                      <strong style={{ fontSize: '0.92rem', color: '#1e3a8a' }}>{ann.title}</strong>
+                    </div>
+                    <p style={{ fontSize: '0.82rem', color: '#1e40af', margin: '0.2rem 0 0', lineHeight: '1.35' }}>
+                      {ann.message}
+                    </p>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexShrink: 0 }}>
+                  {ann.externalUrl && (
+                    <a
+                      href={ann.externalUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn btn-primary btn-sm"
+                      style={{ fontSize: '0.74rem', padding: '0.2rem 0.55rem' }}
+                    >
+                      <ExternalLink size={12} style={{ marginRight: '4px' }} /> Details
+                    </a>
+                  )}
+                  <span
+                    style={{
+                      fontSize: '0.72rem',
+                      color: '#475569',
+                      background: 'rgba(255,255,255,0.7)',
+                      padding: '0.2rem 0.45rem',
+                      borderRadius: '4px',
+                      fontWeight: 700,
+                    }}
+                  >
+                    Active ({daysLeft}d left)
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* OVERDUE WARNING BANNER */}
       {stats.overdueItems.length > 0 && (
         <div className="alert alert-danger" style={{ marginBottom: '1.5rem' }}>
@@ -273,7 +440,7 @@ export default function StudentPortal({ currentUser, onToast }) {
             <div style={{ marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
               {stats.overdueItems.map((it, idx) => (
                 <div key={idx} className="font-mono text-xs" style={{ fontWeight: 600 }}>
-                  • {it.componentName} {it.individualIds?.length > 0 ? `(${it.individualIds.join(', ')})` : ''} — Due Date: {new Date(it.dueDate).toLocaleDateString()} (Overdue by {it.daysOverdue} days)
+                  • {it.componentName} {it.individualIds?.length > 0 ? `(${it.individualIds.join(', ')})` : ''} — Due Date: {formatDisplayDate(it.dueDate)} (Overdue by {it.daysOverdue} days)
                 </div>
               ))}
             </div>
@@ -282,26 +449,30 @@ export default function StudentPortal({ currentUser, onToast }) {
       )}
 
       {/* 5 KEY PERSONAL METRIC CARDS */}
-      <div className="stats-grid" style={{ marginBottom: '1.5rem' }}>
+      <div className="stats-grid" data-tour="student-portal-stats" style={{ marginBottom: '1.5rem' }}>
         {/* Working-day daily streak */}
-        <div className="stat-card" style={{ borderLeft: '4px solid #f97316' }}>
+        <div className="stat-card" style={{ borderLeft: '4px solid #f97316', background: 'linear-gradient(135deg, #ffffff 0%, #fff7ed 100%)' }}>
           <div className="stat-card-left">
             <span className="stat-label" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
               <span>Working-Day Streak</span>
               <span
-                style={{ fontSize: '0.7rem', color: '#ea580c', cursor: 'help' }}
+                style={{ fontSize: '0.68rem', background: '#ffedd5', color: '#c2410c', padding: '1px 6px', borderRadius: 999, fontWeight: 700, cursor: 'help' }}
                 title="Sundays and college holidays do NOT break your streak!"
               >
-                (Holidays Safe)
+                Holidays Immune
               </span>
             </span>
-            <span className="stat-value" style={{ color: '#ea580c', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-              {stats.workingDayStreak} <small style={{ fontSize: '0.9rem' }}>days</small>
+            <span className="stat-value" style={{ color: '#ea580c', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <Flame size={26} className="text-warning" style={{ color: '#ea580c', fill: stats.workingDayStreak > 0 ? '#ea580c' : 'none' }} />
+              <span>{stats.workingDayStreak}</span>
+              <small style={{ fontSize: '0.9rem', color: '#9a3412', fontWeight: 600 }}>consecutive working days</small>
             </span>
-            <span className="stat-subtext">Active continuous lab streak</span>
+            <span className="stat-subtext" style={{ color: '#9a3412', fontSize: '0.75rem' }}>
+              {stats.workingDayStreak > 0 ? '🔥 Active lab visit streak maintained' : 'Visit the lab today to begin your streak!'}
+            </span>
           </div>
           <div className="stat-icon-wrapper" style={{ background: '#ffedd5', color: '#ea580c' }}>
-            <Flame size={24} />
+            <Flame size={26} />
           </div>
         </div>
 
@@ -377,6 +548,14 @@ export default function StudentPortal({ currentUser, onToast }) {
         </button>
         <button
           type="button"
+          className={`btn ${portalTab === 'announcements_events' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
+          onClick={() => setPortalTab('announcements_events')}
+        >
+          <Megaphone size={14} style={{ marginRight: '4px' }} />
+          Notices & Events ({(stats.announcements?.length || 0) + (stats.events?.length || 0)})
+        </button>
+        <button
+          type="button"
           className={`btn ${portalTab === 'projects' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
           onClick={() => setPortalTab('projects')}
         >
@@ -427,7 +606,7 @@ export default function StudentPortal({ currentUser, onToast }) {
 
       {/* TAB 1: OVERVIEW (Borrowed Components & History) */}
       {portalTab === 'overview' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        <div data-tour="student-borrowed-items" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           {/* CURRENTLY ISSUED COMPONENTS */}
           <div className="card">
             <div className="card-header">
@@ -459,25 +638,31 @@ export default function StudentPortal({ currentUser, onToast }) {
                       <tr key={idx}>
                         <td>
                           <strong>{it.componentName}</strong>
+                          <div style={{ marginTop: '0.2rem' }}>
+                            <CategoryBreadcrumb component={it} categories={categories} fontSize="0.75rem" />
+                          </div>
                           {it.individualIds?.length > 0 && (
-                            <div className="font-mono text-xs text-muted">
+                            <div className="font-mono text-xs text-muted" style={{ marginTop: '0.2rem' }}>
                               IDs: {it.individualIds.join(', ')}
                             </div>
                           )}
                         </td>
                         <td>{it.remainingQuantity}</td>
-                        <td>{new Date(it.issueDate).toLocaleDateString()}</td>
+                        <td>{formatDisplayDate(it.issueDate)}</td>
                         <td>
                           <span className={it.isOverdue ? 'text-danger font-bold' : ''}>
-                            {new Date(it.dueDate).toLocaleDateString()}
+                            {formatDisplayDate(it.dueDate)}
                           </span>
                         </td>
                         <td>
                           {it.isOverdue ? (
                             <span className="badge badge-danger">Overdue by {it.daysOverdue}d</span>
-                          ) : (
-                            <span className="badge badge-success">Active</span>
-                          )}
+                          ) : (() => {
+                            const msLeft = new Date(it.dueDate).getTime() - Date.now();
+                            const daysLeft = Math.ceil(msLeft / (24 * 60 * 60 * 1000));
+                            if (daysLeft <= 0) return <span className="badge badge-warning">Due Today</span>;
+                            return <span className="badge badge-success">Due in {daysLeft}d</span>;
+                          })()}
                         </td>
                       </tr>
                     ))
@@ -488,13 +673,43 @@ export default function StudentPortal({ currentUser, onToast }) {
           </div>
 
           {/* LAB VISITS TIMELINE */}
-          <div className="card">
+          <div className="card" data-tour="student-attendance-card">
             <div className="card-header">
               <h3 className="card-title">
                 <History size={18} /> My Lab Visit History
               </h3>
               <span className="badge badge-primary">{stats.visitHistory.length} Sessions</span>
             </div>
+
+            {/* Notification if student had a visit auto-closed at closing time */}
+            {(() => {
+              const recentAutoClosed = (stats.visitHistory || []).find(
+                (v) => v && (v.exitMethod === 'automatic_end_of_day' || v.isAutoClosed)
+              );
+              if (!recentAutoClosed) return null;
+              return (
+                <div
+                  style={{
+                    margin: '1rem 1.25rem 0',
+                    padding: '0.75rem 1rem',
+                    background: '#fffbeb',
+                    border: '1px solid #fde68a',
+                    borderRadius: 'var(--radius-md)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.6rem',
+                    fontSize: '0.84rem',
+                    color: '#92400e',
+                  }}
+                >
+                  <Clock size={16} style={{ color: '#d97706', flexShrink: 0 }} />
+                  <div>
+                    <strong>Notice:</strong> Your lab visit on {formatDisplayDate(recentAutoClosed.entryTime)} was automatically closed at lab closing time ({new Date(recentAutoClosed.exitTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}).
+                  </div>
+                </div>
+              );
+            })()}
+
             <div className="table-responsive">
               <table className="table">
                 <thead>
@@ -516,16 +731,34 @@ export default function StudentPortal({ currentUser, onToast }) {
                   ) : (
                     stats.visitHistory.slice(0, 10).map((v) => (
                       <tr key={v.id}>
-                        <td className="font-mono">{new Date(v.entryTime).toLocaleDateString()}</td>
-                        <td>{new Date(v.entryTime).toLocaleTimeString()}</td>
+                        <td className="font-mono">{formatDisplayDate(v.entryTime)}</td>
+                        <td>{new Date(v.entryTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
                         <td>
                           {v.exitTime ? (
-                            new Date(v.exitTime).toLocaleTimeString()
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                              <span>{new Date(v.exitTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                              {(v.exitMethod === 'automatic_end_of_day' || v.isAutoClosed) && (
+                                <span
+                                  className="badge"
+                                  style={{
+                                    fontSize: '0.68rem',
+                                    padding: '0.1rem 0.4rem',
+                                    background: '#fef3c7',
+                                    color: '#b45309',
+                                    border: '1px solid #fde68a',
+                                    fontWeight: 700,
+                                  }}
+                                  title="This visit was automatically closed at lab closing time because no manual checkout was recorded"
+                                >
+                                  Auto-Closed
+                                </span>
+                              )}
+                            </div>
                           ) : (
                             <span className="badge badge-success">Still Inside</span>
                           )}
                         </td>
-                        <td>{v.durationMinutes ? `${v.durationMinutes} min` : 'In Progress'}</td>
+                        <td>{v.durationFormatted || (v.durationMinutes ? `${v.durationMinutes} min` : 'In Progress')}</td>
                         <td>
                           <span className="badge badge-secondary">{v.entryMethod || 'Manual'}</span>
                         </td>
@@ -534,6 +767,158 @@ export default function StudentPortal({ currentUser, onToast }) {
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB: NOTICES & EVENTS */}
+      {portalTab === 'announcements_events' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          {/* Active Announcements */}
+          <div className="card">
+            <div className="card-header">
+              <h3 className="card-title">
+                <Megaphone size={18} /> Active Lab Broadcasts & Faculty Notices
+              </h3>
+              <span className="badge badge-primary">{stats.announcements?.length || 0} Active</span>
+            </div>
+            <div className="card-body">
+              {(!stats.announcements || stats.announcements.length === 0) ? (
+                <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--neutral-500)' }}>
+                  No active broadcasts at this moment. Regular lab schedules apply.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  {stats.announcements.map((ann) => (
+                    <div
+                      key={ann.id}
+                      style={{
+                        padding: '1.25rem',
+                        background: '#f8fafc',
+                        borderRadius: 'var(--radius-md)',
+                        border: '1px solid var(--neutral-200)',
+                      }}
+                    >
+                      <div className="flex-between" style={{ marginBottom: '0.4rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span className="badge badge-primary">{ann.category}</span>
+                          <span className="badge badge-secondary">Audience: {ann.targetAudience || 'All Students'}</span>
+                        </div>
+                        <span className="text-xs text-muted">
+                          Expires: {formatDisplayDate(ann.expiresAt)}
+                        </span>
+                      </div>
+                      <h4 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--neutral-900)', marginBottom: '0.35rem' }}>
+                        {ann.title}
+                      </h4>
+                      <p style={{ fontSize: '0.88rem', color: 'var(--neutral-700)', lineHeight: '1.45', margin: 0 }}>
+                        {ann.message}
+                      </p>
+                      {ann.externalUrl && (
+                        <div style={{ marginTop: '0.75rem' }}>
+                          <a
+                            href={ann.externalUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn btn-secondary btn-sm"
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem' }}
+                          >
+                            <ExternalLink size={12} /> External Details & Registration
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Hackathons & Innovation Day Events */}
+          <div className="card">
+            <div className="card-header">
+              <h3 className="card-title">
+                <Calendar size={18} /> Flagship Hackathons & VRSEC Innovation Day Events
+              </h3>
+              <span className="badge badge-success">{stats.events?.length || 0} Events</span>
+            </div>
+            <div className="card-body">
+              {(!stats.events || stats.events.length === 0) ? (
+                <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--neutral-500)' }}>
+                  No event records cataloged yet.
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '1.25rem' }}>
+                  {stats.events.map((evt) => (
+                    <div
+                      key={evt.id}
+                      style={{
+                        padding: '1.25rem',
+                        background: evt.isInnovationDay ? 'linear-gradient(135deg, #ffffff 0%, #fdf4ff 100%)' : '#ffffff',
+                        border: evt.isInnovationDay ? '1px solid #f0abfc' : '1px solid var(--neutral-200)',
+                        borderRadius: 'var(--radius-md)',
+                      }}
+                    >
+                      <div className="flex-between" style={{ marginBottom: '0.5rem' }}>
+                        <span className={`badge ${evt.isInnovationDay ? 'badge-primary' : 'badge-secondary'}`}>
+                          {evt.isInnovationDay ? 'VRSEC Innovation Day' : 'Technical Challenge'}
+                        </span>
+                        <span className="text-xs font-mono text-muted">{formatDisplayDate(evt.eventDate)}</span>
+                      </div>
+
+                      <h4 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--neutral-900)' }}>
+                        {evt.title}
+                      </h4>
+                      {evt.theme && (
+                        <p style={{ fontSize: '0.8rem', color: '#6d28d9', fontWeight: 600, marginTop: '0.2rem' }}>
+                          Theme: {evt.theme}
+                        </p>
+                      )}
+                      <p style={{ fontSize: '0.84rem', color: 'var(--neutral-600)', margin: '0.5rem 0', lineHeight: '1.4' }}>
+                        {evt.description}
+                      </p>
+
+                      {evt.prizes && (
+                        <div style={{ fontSize: '0.84rem', fontWeight: 700, color: '#16a34a', marginBottom: '0.5rem' }}>
+                          Prizes: {evt.prizes}
+                        </div>
+                      )}
+
+                      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.45rem', marginTop: '0.85rem', borderTop: '1px solid var(--neutral-100)', paddingTop: '0.65rem' }}>
+                        {(evt.registrationUrl || evt.externalUrl) && (
+                          <a
+                            href={evt.registrationUrl || evt.externalUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn btn-primary btn-sm"
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem' }}
+                          >
+                            <ExternalLink size={12} /> Register Now
+                          </a>
+                        )}
+                        <a
+                          href={generateGoogleCalendarUrl(evt)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn btn-secondary btn-sm"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem' }}
+                        >
+                          <Calendar size={12} /> Add to Google Calendar
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => downloadIcsFile(evt)}
+                          className="btn btn-secondary btn-sm"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem' }}
+                        >
+                          <Download size={12} /> .ICS
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -653,7 +1038,7 @@ export default function StudentPortal({ currentUser, onToast }) {
                   )}
 
                   <div style={{ fontSize: '0.78rem', color: 'var(--neutral-500)', borderTop: '1px solid var(--neutral-100)', paddingTop: '0.5rem' }}>
-                    Awarded by: <strong>{ach.awardedBy}</strong> on {ach.dateAwarded}
+                    Awarded by: <strong>{ach.awardedBy}</strong> on {formatDisplayDate(ach.dateAwarded)}
                   </div>
                 </div>
               ))}
@@ -741,7 +1126,7 @@ export default function StudentPortal({ currentUser, onToast }) {
                   }}
                 >
                   <div className="flex-between text-xs text-muted" style={{ marginBottom: '0.35rem' }}>
-                    <span>{r.date}</span>
+                    <span>{formatDisplayDate(r.date)}</span>
                     <span className="badge badge-secondary">Private Journal</span>
                   </div>
                   <h4 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--neutral-900)' }}>
@@ -814,51 +1199,13 @@ export default function StudentPortal({ currentUser, onToast }) {
         </div>
       )}
 
-      {/* TAB 7: MOBILE APP (APK) DOWNLOAD QR */}
+      {/* TAB 7: MOBILE APP PWA INSTALLATION */}
       {portalTab === 'apk' && (
-        <div className="card" style={{ maxWidth: '480px', margin: '0 auto', padding: '2rem', textAlign: 'center' }}>
-          <div
-            style={{
-              width: 140,
-              height: 140,
-              margin: '0 auto 1.25rem',
-              background: '#f8fafc',
-              border: '2px dashed var(--neutral-300)',
-              borderRadius: 'var(--radius-lg)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexDirection: 'column',
-              gap: '0.5rem',
-            }}
-          >
-            <QrCode size={64} className="text-primary" />
-            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--neutral-500)' }}>
-              SCAN TO DOWNLOAD
-            </span>
-          </div>
-
-          <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--neutral-900)' }}>
-            Smart Lab Mobile APK
-          </h3>
-          <p className="text-muted text-sm" style={{ margin: '0.5rem 0 1.5rem', lineHeight: '1.45' }}>
-            Instant ID barcode scanning, presence check-in, and component return alerts on your Android device.
-          </p>
-
-          <a
-            href="https://incubation-cms.pages.dev"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn btn-primary btn-lg"
-            style={{ width: '100%', display: 'inline-flex', justifyContent: 'center', gap: '0.5rem' }}
-          >
-            <Download size={18} />
-            <span>Download Mobile App (v1.0.4)</span>
-          </a>
-
-          <div className="text-xs text-muted" style={{ marginTop: '1rem' }}>
-            Direct APK mirror • Storage safe external distribution
-          </div>
+        <div style={{ maxWidth: '480px', margin: '0 auto' }}>
+          <AppInstallQrCard
+            registeredUser={currentUser}
+            inline={true}
+          />
         </div>
       )}
 

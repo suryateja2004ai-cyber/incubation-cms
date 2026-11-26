@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Technical Specification Report - VRSEC Incubation Centre Management System</title>
+<style>
+  @page {
+    size: A4;
+    margin: 20mm 15mm 20mm 15mm;
+    @bottom-right {
+      content: counter(page);
+    }
+  }
+
+  body {
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+    color: #1e293b;
+    line-height: 1.55;
+    font-size: 10.5pt;
+    margin: 0;
+    padding: 0;
+    background: #ffffff;
+  }
+
+  h1, h2, h3, h4 {
+    color: #0f172a;
+    font-weight: 700;
+    page-break-after: avoid;
+  }
+
+  .cover-header {
+    border-bottom: 3px solid #2563eb;
+    padding-bottom: 16px;
+    margin-bottom: 24px;
+  }
+
+  .title {
+    font-size: 20pt;
+    color: #1e3a8a;
+    margin: 0 0 8px 0;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+
+  .subtitle {
+    font-size: 13pt;
+    color: #475569;
+    margin: 0 0 16px 0;
+    font-weight: 500;
+  }
+
+  .meta-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 16px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 12px 16px;
+    font-size: 9pt;
+    margin-bottom: 24px;
+  }
+
+  .meta-item strong {
+    color: #334155;
+  }
+
+  h2 {
+    font-size: 13.5pt;
+    border-bottom: 1.5px solid #cbd5e1;
+    padding-bottom: 6px;
+    margin-top: 26px;
+    margin-bottom: 12px;
+    color: #1e40af;
+    display: flex;
+    align-items: center;
+  }
+
+  h3 {
+    font-size: 11pt;
+    color: #0f172a;
+    margin-top: 18px;
+    margin-bottom: 8px;
+  }
+
+  p {
+    margin: 0 0 10px 0;
+    text-align: justify;
+  }
+
+  ul, ol {
+    margin: 0 0 12px 0;
+    padding-left: 20px;
+  }
+
+  li {
+    margin-bottom: 4px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0 18px 0;
+    font-size: 8.5pt;
+    page-break-inside: avoid;
+  }
+
+  th {
+    background: #1e3a8a;
+    color: #ffffff;
+    font-weight: 600;
+    text-align: left;
+    padding: 6px 8px;
+    border: 1px solid #1e3a8a;
+  }
+
+  td {
+    padding: 5px 8px;
+    border: 1px solid #cbd5e1;
+    vertical-align: top;
+  }
+
+  tr:nth-child(even) {
+    background: #f8fafc;
+  }
+
+  code {
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 8.5pt;
+    background: #f1f5f9;
+    padding: 1px 4px;
+    border-radius: 3px;
+    border: 1px solid #e2e8f0;
+    color: #0f172a;
+  }
+
+  pre {
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 7.8pt;
+    background: #0f172a;
+    color: #f8fafc;
+    padding: 10px 12px;
+    border-radius: 5px;
+    overflow-x: auto;
+    line-height: 1.35;
+    page-break-inside: avoid;
+    margin: 10px 0 16px 0;
+    border: 1px solid #1e293b;
+  }
+
+  pre.ascii-diagram {
+    background: #f8fafc;
+    color: #0f172a;
+    border: 1px solid #cbd5e1;
+    font-weight: 500;
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 8pt;
+    font-weight: 600;
+  }
+  .badge-success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+  .badge-info { background: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; }
+  .badge-warning { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+
+  .page-break {
+    page-break-before: always;
+  }
+
+  .box-note {
+    background: #eff6ff;
+    border-left: 4px solid #2563eb;
+    padding: 8px 12px;
+    margin: 12px 0;
+    border-radius: 0 4px 4px 0;
+    font-size: 9pt;
+  }
+</style>
+</head>
+<body>
+
+<div class="cover-header">
+  <div class="title">VRSEC Incubation Centre Management System (CMS)</div>
+  <div class="subtitle">Complete Technical Specification & Engineering Integration Report</div>
+  <div class="meta-grid">
+    <div class="meta-item"><strong>Document Scope:</strong> Full-Stack Web Portal, Central REST API & Local Database</div>
+    <div class="meta-item"><strong>Target Hardware Integration:</strong> ESP32 Dual Relay, PZEM-004T v3.0, 3x3 Vision Zoning</div>
+    <div class="meta-item"><strong>Execution Target:</strong> On-Premise Local Lab Server (127.0.0.1 :3001, :8001, :5432)</div>
+    <div class="meta-item"><strong>Final Degree Requirement:</strong> B.Tech Final-Year Capstone Project Specification</div>
+  </div>
+</div>
+
+<h2>1. Tech Stack & Project Directory Structure</h2>
+
+<h3>1.1 Exact Software Versions & Core Dependencies</h3>
+<ul>
+  <li><strong>Frontend Client (React 19 SPA):</strong> React <code>v19.2.8</code>, React-DOM <code>v19.2.8</code>, Vite <code>v8.3.0</code>, Lucide-React <code>v1.44.0</code>, Recharts <code>v3.10.1</code>, Quagga2 <code>v1.12.1</code>, HTML5-QRCode <code>v2.3.8</code>, ZXing-Wasm <code>v3.1.4</code>, Tesseract.js <code>v7.0.0</code>, Supabase-JS <code>v2.116.0</code>.</li>
+  <li><strong>Backend Application Server:</strong> Node.js <code>v20+</code> runtime, native HTTP server (<code>backend/postgres_server.js</code> on port <code>3001</code>), native child process IPC to PostgreSQL 18 binaries.</li>
+  <li><strong>Database Layer:</strong> PostgreSQL <code>v18</code> RDBMS on port <code>5432</code>, database <code>incubation_cms</code>, public schema.</li>
+  <li><strong>Edge Biometrics Microservice:</strong> Python <code>v3.11</code>, FastAPI, Uvicorn on port <code>8001</code>, InsightFace <code>buffalo_l</code> (512-d embeddings), OpenCV, SQLite3 (<code>attendance.db</code>).</li>
+  <li><strong>Edge Vision & Relay Subsystem:</strong> Python <code>v3.11</code>, PySerial, OpenCV, MediaPipe, Arduino C++ firmware (<code>smart_lab_relay_controller.ino</code> on COM4 @ 115200 baud).</li>
+</ul>
+
+<h3>1.2 Project Directory Layout</h3>
+<pre>
+VRSEC Incubation Centre Management System/
+├── backend/
+│   ├── face/                                  # Local Biometric Face Recognition Subsystem (Port 8001)
+│   │   ├── face_server.py                     # FastAPI Biometric API (InsightFace buffalo_l)
+│   │   └── face_utils.py                      # Head-pose estimation & SQLite vector storage
+│   ├── postgres_server.js                     # Main Backend REST API Server (Port 3001)
+│   └── postgres_service.js                    # PostgreSQL Queries, Schema Mappings & Handlers
+├── frontend/                                  # React 19 Client SPA
+│   ├── src/
+│   │   ├── app/App.jsx                        # Application Router & RBAC Controller
+│   │   ├── components/                        # UI Components (Biometrics, Common, Layout, Search, Zones)
+│   │   ├── db/database.js                     # Local-First Memory Store, State & Mutation Engine
+│   │   ├── pages/admin/                       # Admin Views (Dashboard, Components, Issue, Return, Overdue, Students, ControlTab)
+│   │   ├── pages/auth/Login.jsx               # Role-based Login Interface
+│   │   ├── pages/lab/                         # FaceAttendance, LabEntryExit, StudentsInside
+│   │   ├── pages/projects/Projects.jsx        # Shared Student Project Showcase
+│   │   ├── pages/research/ResearchPapers.jsx  # Shared Research Publications
+│   │   ├── pages/student/StudentPortal.jsx    # Student Personal Portal & My Items
+│   │   └── services/                          # Biometric, ESP32, ZoneGesture, Storage, Sync Services
+│   └── package.json
+├── hardware/                                  # Hardware & Vision Integration Subsystem
+│   ├── config/relay_mapping.json              # Physical Pinouts, Zone Mappings & PZEM Config
+│   ├── esp32/smart_lab_relay_controller/      # Primary ESP32 Firmware (COM4, Relays & PZEM)
+│   └── vision/esp32_relay_bridge.py           # Python Serial/WiFi Bridge between Vision and ESP32
+└── tests/                                     # Automated Verification Suites (Unit & Integration)
+</pre>
+
+<div class="page-break"></div>
+
+<h2>2. Complete PostgreSQL Database Schema (incubation_cms)</h2>
+<p>All tables are hosted on local PostgreSQL 18 under database <code>incubation_cms</code>. Exact structural definitions are documented below:</p>
+
+<h3>2.1 Table: <code>public.passwords</code></h3>
+<table>
+  <thead>
+    <tr><th>Column Name</th><th>Data Type</th><th>Nullable</th><th>Default</th><th>Description / Constraints</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>id</code></td><td>integer</td><td>NO</td><td>nextval('passwords_id_seq')</td><td><strong>PRIMARY KEY</strong> (Auto-incrementing)</td></tr>
+    <tr><td><code>roll_number</code></td><td>character varying</td><td>NO</td><td>—</td><td><strong>UNIQUE</strong>, Student Roll / Admin ID</td></tr>
+    <tr><td><code>password</code></td><td>character varying</td><td>NO</td><td>—</td><td>Plaintext/Credential string (Admin viewable)</td></tr>
+    <tr><td><code>student_name</code></td><td>character varying</td><td>NO</td><td>—</td><td>Full name of student / staff member</td></tr>
+    <tr><td><code>role</code></td><td>character varying</td><td>YES</td><td>'student'</td><td>Role: 'student', 'admin', 'staff', 'substitute_admin'</td></tr>
+    <tr><td><code>department</code></td><td>character varying</td><td>YES</td><td>—</td><td>Academic branch (ECE, CSE, IT, MECH, etc.)</td></tr>
+    <tr><td><code>phone_number</code></td><td>character varying</td><td>YES</td><td>—</td><td>Mobile telephone number</td></tr>
+    <tr><td><code>created_at</code></td><td>timestamptz</td><td>YES</td><td>now()</td><td>Record creation timestamp</td></tr>
+    <tr><td><code>updated_at</code></td><td>timestamptz</td><td>YES</td><td>now()</td><td>Timestamp of last modification</td></tr>
+  </tbody>
+</table>
+
+<h3>2.2 Table: <code>public.issued_components</code></h3>
+<table>
+  <thead>
+    <tr><th>Column Name</th><th>Data Type</th><th>Nullable</th><th>Default</th><th>Description / Constraints</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>id</code></td><td>varchar(100)</td><td>NO</td><td>—</td><td><strong>PRIMARY KEY</strong> (e.g. TXN-1795674000000)</td></tr>
+    <tr><td><code>registration_number</code></td><td>varchar(50)</td><td>NO</td><td>—</td><td>Student roll number linked to checkout</td></tr>
+    <tr><td><code>student_name</code></td><td>varchar(150)</td><td>NO</td><td>—</td><td>Student full name</td></tr>
+    <tr><td><code>phone_number</code></td><td>varchar(25)</td><td>YES</td><td>—</td><td>Contact telephone number</td></tr>
+    <tr><td><code>student_details</code></td><td>jsonb</td><td>YES</td><td>'{}'::jsonb</td><td>Metadata (department, year, section)</td></tr>
+    <tr><td><code>components</code></td><td>jsonb</td><td>NO</td><td>'[]'::jsonb</td><td>Array of borrowed component items</td></tr>
+    <tr><td><code>issue_date</code></td><td>timestamptz</td><td>YES</td><td>now()</td><td>Checkout timestamp</td></tr>
+    <tr><td><code>overall_due_date</code></td><td>timestamptz</td><td>YES</td><td>—</td><td>Maximum loan due date across all items</td></tr>
+    <tr><td><code>status</code></td><td>varchar(50)</td><td>YES</td><td>'issued'</td><td>Loan status: 'issued', 'returned', 'partial'</td></tr>
+    <tr><td><code>notes</code></td><td>text</td><td>YES</td><td>—</td><td>Project purpose or checkout remarks</td></tr>
+    <tr><td><code>issued_by</code></td><td>varchar(100)</td><td>YES</td><td>—</td><td>Username of issuing staff/admin</td></tr>
+    <tr><td><code>created_at</code></td><td>timestamptz</td><td>YES</td><td>now()</td><td>Creation timestamp</td></tr>
+    <tr><td><code>updated_at</code></td><td>timestamptz</td><td>YES</td><td>now()</td><td>Last modification timestamp</td></tr>
+  </tbody>
+</table>
+
+<h3>2.3 Table: <code>public.overdue_components</code></h3>
+<table>
+  <thead>
+    <tr><th>Column Name</th><th>Data Type</th><th>Nullable</th><th>Default</th><th>Description / Constraints</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>id</code></td><td>varchar</td><td>NO</td><td>—</td><td><strong>PRIMARY KEY</strong> (OVD-{txnId}-{componentId})</td></tr>
+    <tr><td><code>transaction_id</code></td><td>varchar</td><td>NO</td><td>—</td><td>Foreign reference to issued_components.id</td></tr>
+    <tr><td><code>registration_number</code></td><td>varchar</td><td>NO</td><td>—</td><td>Student roll number</td></tr>
+    <tr><td><code>student_name</code></td><td>varchar</td><td>NO</td><td>—</td><td>Student full name</td></tr>
+    <tr><td><code>component_id</code></td><td>varchar</td><td>NO</td><td>—</td><td>ID of overdue component</td></tr>
+    <tr><td><code>component_name</code></td><td>varchar</td><td>NO</td><td>—</td><td>Display name of component</td></tr>
+    <tr><td><code>remaining_quantity</code></td><td>integer</td><td>NO</td><td>1</td><td>Unreturned item count</td></tr>
+    <tr><td><code>individual_ids</code></td><td>jsonb</td><td>YES</td><td>'[]'::jsonb</td><td>Unreturned barcode/QR serial tags</td></tr>
+    <tr><td><code>due_date</code></td><td>timestamptz</td><td>NO</td><td>—</td><td>Agreed return deadline</td></tr>
+    <tr><td><code>overdue_days</code></td><td>integer</td><td>NO</td><td>0</td><td>Days elapsed past due date</td></tr>
+    <tr><td><code>severity</code></td><td>varchar</td><td>YES</td><td>'moderate'</td><td>'moderate' (1-7 days), 'critical' (&gt;7 days)</td></tr>
+    <tr><td><code>status</code></td><td>varchar</td><td>YES</td><td>'overdue'</td><td>'overdue', 'returned'</td></tr>
+    <tr><td><code>checked_at</code></td><td>timestamptz</td><td>YES</td><td>now()</td><td>Timestamp when overdue check executed</td></tr>
+  </tbody>
+</table>
+
+<h3>2.4 Table: <code>public.power_consumption</code></h3>
+<table>
+  <thead>
+    <tr><th>Column Name</th><th>Data Type</th><th>Nullable</th><th>Default</th><th>Description / Constraints</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>id</code></td><td>integer</td><td>NO</td><td>nextval(...)</td><td><strong>PRIMARY KEY</strong> (Auto-incrementing)</td></tr>
+    <tr><td><code>device_id</code></td><td>varchar</td><td>NO</td><td>—</td><td>Hardware ID (DEV-LIGHT-1, DEV-AC-1)</td></tr>
+    <tr><td><code>device_name</code></td><td>varchar</td><td>NO</td><td>—</td><td>Display name (Light 1 (Zone Z1))</td></tr>
+    <tr><td><code>device_type</code></td><td>varchar</td><td>YES</td><td>—</td><td>'light', 'fan', 'ac', 'workstation'</td></tr>
+    <tr><td><code>location</code></td><td>varchar</td><td>NO</td><td>—</td><td>Zone or Section (Zone Z1, Zone Z9)</td></tr>
+    <tr><td><code>actual_state</code></td><td>varchar</td><td>YES</td><td>'off'</td><td>Relay state: 'on', 'off'</td></tr>
+    <tr><td><code>power_rating_watts</code></td><td>numeric</td><td>YES</td><td>0</td><td>Active power consumption in Watts</td></tr>
+    <tr><td><code>daily_kwh</code></td><td>numeric</td><td>YES</td><td>0</td><td>Daily cumulative energy (kWh)</td></tr>
+    <tr><td><code>monthly_kwh</code></td><td>numeric</td><td>YES</td><td>0</td><td>Monthly cumulative energy (kWh)</td></tr>
+    <tr><td><code>estimated_monthly_cost</code></td><td>numeric</td><td>YES</td><td>0</td><td>Estimated cost in INR</td></tr>
+    <tr><td><code>recorded_at</code></td><td>timestamptz</td><td>YES</td><td>now()</td><td>Telemetry capture timestamp</td></tr>
+  </tbody>
+</table>
+
+<h3>2.5 Tables: <code>public.projects</code> & <code>public.research_publications</code></h3>
+<p>Maintain shared repositories of student prototypes (columns: <code>id</code>, <code>title</code>, <code>description</code>, <code>domain</code>, <code>status</code>, <code>student_roll</code>, <code>student_name</code>, <code>team_members</code> [jsonb], <code>tags</code> [jsonb], <code>github_url</code>, <code>demo_url</code>) and research papers (columns: <code>id</code>, <code>title</code>, <code>abstract</code>, <code>paper_type</code>, <code>domain</code>, <code>journal_conference_name</code>, <code>student_roll</code>, <code>student_name</code>, <code>authors</code> [jsonb], <code>doi</code>, <code>external_url</code>, <code>publication_date</code>).</p>
+
+<h3>2.6 Stock Decrement and Increment Engine</h3>
+<ul>
+  <li><strong>On Issue (<code>issueComponents()</code>):</strong> Validates stock availability. Decrements <code>availableQuantity = availableQuantity - quantity</code> and increments <code>issuedQuantity = issuedQuantity + quantity</code>. Serial barcode/QR tags are set to <code>status = 'issued'</code>. A row is inserted into <code>public.issued_components</code>.</li>
+  <li><strong>On Return (<code>returnComponents()</code>):</strong> Validates return count $le$ unreturned count. Increments <code>availableQuantity = availableQuantity + returnQty</code> and decrements <code>issuedQuantity = max(0, issuedQuantity - returnQty)</code>. Serial tags are reset to <code>status = 'available'</code>. Updates <code>public.issued_components</code> to <code>'returned'</code> and resolves any corresponding record in <code>public.overdue_components</code>.</li>
+</ul>
+
+<div class="page-break"></div>
+
+<h2>3. Complete Backend REST API Reference</h2>
+<p>Hosted on <code>http://127.0.0.1:3001</code> (Node.js REST server via <code>backend/postgres_server.js</code>):</p>
+
+<table>
+  <thead>
+    <tr><th>HTTP Method</th><th>Endpoint Route</th><th>Request Payload Summary</th><th>Response Structure</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>POST</code></td><td><code>/api/auth/login</code></td><td><code>{ identifier, password }</code></td><td><code>{ success: true, user: { rollNumber, name, role, department } }</code></td></tr>
+    <tr><td><code>POST</code></td><td><code>/api/auth/signup</code></td><td><code>{ roll_number, password, student_name, role, department, phone_number }</code></td><td><code>{ success: true, user: {...}, message: "Account registered" }</code></td></tr>
+    <tr><td><code>POST</code></td><td><code>/api/auth/reset-password</code></td><td><code>{ roll_number, new_password }</code></td><td><code>{ success: true, message: "Password updated" }</code></td></tr>
+    <tr><td><code>GET</code></td><td><code>/api/auth/users</code></td><td>None (Query string)</td><td><code>{ success: true, users: [ { id, roll_number, password, student_name, ... } ] }</code></td></tr>
+    <tr><td><code>POST</code></td><td><code>/api/issued-components</code></td><td><code>{ id, registration_number, student_name, components: [...], issue_date, overall_due_date }</code></td><td><code>{ success: true, id: "TXN-...", message: "Saved to PostgreSQL" }</code></td></tr>
+    <tr><td><code>GET</code></td><td><code>/api/issued-components</code></td><td>Optional: <code>?registration_number=...</code></td><td><code>{ data: [ { id, registration_number, components, status, ... } ] }</code></td></tr>
+    <tr><td><code>POST</code></td><td><code>/api/return-components</code></td><td><code>{ id, status: 'returned', items: [ { componentId, returnedQuantity, ... } ] }</code></td><td><code>{ success: true, id: "...", message: "Return status updated" }</code></td></tr>
+    <tr><td><code>POST</code></td><td><code>/api/check-overdues</code></td><td>None (Executes date scan query)</td><td><code>{ success: true, count: N, data: [ ...overdue items... ] }</code></td></tr>
+    <tr><td><code>GET</code></td><td><code>/api/overdue-components</code></td><td>None</td><td><code>{ data: [ { id, registration_number, overdue_days, severity, ... } ] }</code></td></tr>
+    <tr><td><code>POST</code></td><td><code>/api/power-consumption</code></td><td><code>{ devices: [ { id, name, location, actualState, powerRatingWatts, ... } ] }</code></td><td><code>{ success: true, count: N, message: "Power consumption records stored" }</code></td></tr>
+    <tr><td><code>GET</code></td><td><code>/api/power-consumption</code></td><td>None</td><td><code>{ data: [ { device_id, location, power_rating_watts, daily_kwh, ... } ] }</code></td></tr>
+    <tr><td><code>POST / GET</code></td><td><code>/api/projects</code></td><td><code>{ title, domain, student_roll, team_members, tags, github_url }</code></td><td><code>{ success: true, id: "PROJ-...", message: "Project showcased" }</code> / <code>{ data: [...] }</code></td></tr>
+    <tr><td><code>POST / GET</code></td><td><code>/api/publications</code></td><td><code>{ title, paper_type, journal_conference_name, student_roll, doi }</code></td><td><code>{ success: true, id: "PUB-...", message: "Publication posted" }</code> / <code>{ data: [...] }</code></td></tr>
+    <tr><td><code>GET</code></td><td><code>/api/pg/health</code></td><td>None</td><td><code>{ status: "connected", issued_count, overdue_count, passwords_count, ... }</code></td></tr>
+  </tbody>
+</table>
+
+<h2>4. Integration Architecture with Hardware / ESP32 / Python Layer</h2>
+<ul>
+  <li><strong>Physical Setup & Port Binding:</strong> ESP32 Dev Module connected via USB Serial on <code>COM4</code> at <code>115200</code> baud. Handled by <code>hardware/vision/esp32_relay_bridge.py</code>.</li>
+  <li><strong>Relay Pinouts (Active-HIGH Logic):</strong>
+    <ul>
+      <li><strong>Relay 1:</strong> Connected to <strong><code>GPIO 22</code></strong> $ightarrow$ Controls <strong>Light 1</strong> (Zone <strong><code>Z1</code></strong>).</li>
+      <li><strong>Relay 2:</strong> Connected to <strong><code>GPIO 23</code></strong> $ightarrow$ Controls <strong>Light 2</strong> (Zone <strong><code>Z9</code></strong> / <code>Z2</code>).</li>
+    </ul>
+  </li>
+  <li><strong>PZEM-004T v3.0 Energy Telemetry:</strong>
+    <ul>
+      <li>Connected to ESP32 Hardware UART2 (<code>GPIO 25 = RX</code> $leftarrow$ PZEM TX, <code>GPIO 33 = TX</code> $ightarrow$ PZEM RX).</li>
+      <li>Measures AC Voltage, Current, Power (W), Cumulative Energy (kWh), Frequency (Hz), and Power Factor. Emits structured telemetry over Serial.</li>
+    </ul>
+  </li>
+  <li><strong>3x3 Zoning Topology & Gesture Arbitration:</strong>
+    <ul>
+      <li>Grid zones: <code>Z1</code> (Physical GPIO 22), <code>Z9</code> (Physical GPIO 23), and <code>Z2</code>-<code>Z8</code> (Simulated / mapped).</li>
+      <li>10.0-second non-blocking vacancy timer per zone. Occupancy triggers relay ON; vacancy timer expiration resets relay to OFF.</li>
+      <li>Hand gestures: Palm-facing gesture forces Fan OFF; Back-of-hand gesture forces Light OFF with a 5-frame stability threshold.</li>
+      <li>Telemetry from Python vision service is polled by <code>ZoneGestureService.js</code>, updating UI and logging into PostgreSQL <code>public.power_consumption</code>.</li>
+    </ul>
+  </li>
+</ul>
+
+<div class="page-break"></div>
+
+<h2>5. Authentication & Face/Biometric Module Status</h2>
+<div class="box-note">
+  <strong>Implementation Status:</strong> The biometric face recognition module is <strong>fully implemented and verified in the codebase</strong>, operating via a local Python FastAPI microservice on port <code>8001</code>.
+</div>
+<ul>
+  <li><strong>Role-Based Access Control (RBAC):</strong>
+    <ul>
+      <li><strong>Admin:</strong> Unrestricted access to all modules, plain student passwords, and retention plans.</li>
+      <li><strong>Staff:</strong> Desk access only (Issue, Return, Overdue, Lab Entry/Exit, Students Inside, Projects). Administrative tabs are restricted.</li>
+      <li><strong>Student:</strong> Personal portal only (borrowed items, personal attendance, project showcase submission).</li>
+    </ul>
+  </li>
+  <li><strong>Biometric Engine (InsightFace buffalo_l):</strong> Generates 512-dimensional facial embedding vectors. Raw images are processed in RAM and discarded immediately. Embeddings are stored in SQLite (<code>attendance.db</code>).</li>
+  <li><strong>10-Pose Head-Pose Guide (<code>FaceRegistrationModal.jsx</code>):</strong> Guides students through Frontal, Yaw Left ($&gt;15^circ$), Yaw Right ($&gt;15^circ$), Pitch Up ($&gt;10^circ$), and Pitch Down ($&gt;10^circ$) to build an accurate multi-angle profile.</li>
+  <li><strong>Kiosk Attendance Terminal (<code>FaceAttendance.jsx</code>):</strong> Live webcam feed matched against registered embeddings. Cosine similarity $ge 0.65$ records automatic lab entry/exit with duration calculation.</li>
+</ul>
+
+<h2>6. Functional Workflows & System Architecture Diagrams</h2>
+
+<h3>6.1 End-to-End System Architecture</h3>
+<pre class="ascii-diagram">
++================================================================================================+
+|                                    PRESENTATION LAYER (CLIENT)                                 |
+|   +------------------------------------+             +-------------------------------------+   |
+|   |         ADMIN / STAFF PORTAL       |             |            STUDENT PORTAL           |   |
+|   | - Issue / Return Desk              |             | - Active Borrowed Items             |   |
+|   | - Overdue Tracker & Due Date Scan  |             | - Project Showcase Submission       |   |
+|   | - Student Accounts & Passwords     |             | - Research Paper Publishing         |   |
+|   | - 3x3 Smart Lab Relay & Power HUD  |             | - Attendance & Retention Ledger     |   |
+|   +------------------------------------+             +-------------------------------------+   |
++================================================================================================+
+                                      │                             │
+                        HTTP REST     │                             │  HTTP REST
+                        JSON / CORS   │                             │  JSON / CORS
+                                      ▼                             ▼
++================================================================================================+
+|                             APPLICATION & INTEGRATION BACKEND (NODE.JS)                        |
+|   [ postgres_server.js ] on Port 3001                                                          |
+|   ├── Route: /api/auth/*              (Login, Signup, Reset Password, List Users)              |
+|   ├── Route: /api/issued-components   (Insert loans, Query student transactions)               |
+|   ├── Route: /api/return-components   (Update return statuses, release item tags)              |
+|   ├── Route: /api/check-overdues      (Execute overdue date scans & severity classification)   |
+|   ├── Route: /api/power-consumption   (Ingest zone & hardware wattage/kWh telemetry)           |
+|   └── Route: /api/projects & /publ... (Shared peer innovation repositories)                    |
++================================================================================================+
+          │                                         │                            │
+   Native │ Child Process                    HTTP   │ Proxy               Serial │ COM4
+   psql   │ IPC Commands                     Stream │ :8001 / :8002       115200 │ Baud
+          ▼                                         ▼                            ▼
++=============================+    +=============================+   +===========================+
+|       DATABASE LAYER        |    |       AI & VISION LAYER     |   |    EDGE HARDWARE LAYER    |
+|   [ PostgreSQL 18 RDBMS ]   |    |  [ FastAPI Face Server ]    |   |  [ ESP32 Microcontroller ]|
+|   Database: incubation_cms  |    |  - InsightFace buffalo_l    |   |  - GPIO 22: Light 1 (Z1)  |
+|   Port: 5432                |    |  - SQLite attendance.db     |   |  - GPIO 23: Light 2 (Z9)  |
+|   1. passwords              |    |  - Port 8001                |   |                           |
+|   2. issued_components      |    |                             |   |  [ PZEM-004T v3.0 Meter ] |
+|   3. overdue_components     |    |  [ OpenCV + MediaPipe ]     |   |  - UART2 (GPIO 25 & 33)   |
+|   4. power_consumption      |    |  - 3x3 Zone Grid (Z1-Z9)    |   |  - Voltage, Current, Power|
+|   5. projects               |    |  - 10s Non-blocking Vacancy |   |    Frequency, PF, kWh     |
+|   6. research_publications  |    |  - Port 8002                |   |                           |
++=============================+    +=============================+   +===========================+
+</pre>
+
+<div class="page-break"></div>
+
+<h3>6.2 Component Checkout $ightarrow$ Overdue Detection $ightarrow$ Return Inspection</h3>
+<pre class="ascii-diagram">
+[ STUDENT AT DESK ]
+        │
+        ▼
+[ Admin Opens "Issue Component" ]
+        ├── 1. Selects Student (Roll Number validated in memoryStore / passwords)
+        ├── 2. Selects Hardware Items (Checks: requested_qty <= available_qty)
+        ├── 3. Scans / Assigns Individual Barcode/QR Serial Tags
+        └── 4. Sets Overall Due Date (e.g., 7 days loan duration)
+        │
+        ▼
+[ Dispatch POST /api/issued-components ]
+        ├── In-Memory Store: Decrements availableQuantity, increments issuedQuantity
+        └── PostgreSQL: Inserts transaction row into public.issued_components (status = 'issued')
+        │
+        ▼
+========================== TIME ELAPSES PAST DUE DATE ==========================
+        │
+        ▼
+[ Admin Navigates to "Overdue Tracker" & Clicks "Check Overdues" ]
+        │
+        ▼
+[ Dispatch POST /api/check-overdues ]
+        ├── Query: SELECT * FROM public.issued_components WHERE status != 'returned'
+        ├── Filter: Check each component: is (CURRENT_DATE > item.dueDate)?
+        │     ├── Calculate overdueDays = ceil((now - dueDate) / 86400000)
+        │     └── Determine severity = (overdueDays > 7 ? 'critical' : 'moderate')
+        └── Upsert: Insert/Update record into public.overdue_components with unreturned tag list
+        │
+        ▼
+[ Admin Table Renders Overdue Students ] (Displays Student Name, Roll, Days Overdue, Severity, Phone)
+        │
+        ▼
+[ STUDENT RETURNS PHYSICAL COMPONENT TO DESK ]
+        │
+        ▼
+[ Admin Opens "Return Component" & Inspects Hardware Condition ]
+        ├── 1. Enter Transaction ID or Student Roll
+        ├── 2. Verify returned physical items and individual serial tags
+        └── 3. Confirm Return
+        │
+        ▼
+[ Dispatch POST /api/return-components ]
+        ├── In-Memory Store: Restores availableQuantity, frees individual tag serials
+        ├── PostgreSQL issued_components: Updates components JSON array & status = 'returned'
+        └── PostgreSQL overdue_components: Flags overdue record status = 'returned'
+        │
+        ▼
+[ LOAN LIFECYCLE COMPLETED & AUDIT LOG RECORDED ]
+</pre>
+
+<h2>7. Testing, Verification & Screenshot Checklist</h2>
+
+<h3>7.1 Automated Test Execution Results</h3>
+<ul>
+  <li><strong>Frontend Build (Vite <code>v8.3.0</code>):</strong> <code>npm --prefix frontend run build</code> transformed 2,526 modules in 1.63s with <strong>0 errors</strong>.</li>
+  <li><strong>Master Workstream Verification Suite (<code>test_master_fixes.mjs</code>):</strong> <strong>22 / 22 Tests PASSED (100%)</strong>.</li>
+  <li><strong>3x3 Zone & Gesture Control Suite (<code>test_zone_gesture_control.mjs</code>):</strong> <strong>11 / 11 Tests PASSED (100%)</strong>.</li>
+  <li><strong>Database Relation Verification:</strong> Confirmed 6 operational tables (<code>passwords</code>, <code>issued_components</code>, <code>overdue_components</code>, <code>power_consumption</code>, <code>projects</code>, <code>research_publications</code>) and 1 view (<code>transactions_view</code>).</li>
+</ul>
+
+<h3>7.2 Final Report Screenshot Checklist</h3>
+<table>
+  <thead>
+    <tr><th>Fig #</th><th>Interface / Page Title</th><th>Route / Active Tab</th><th>Key Visual Elements to Highlight</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>Fig 7.1</strong></td><td>Role-Based Login Screen</td><td><code>/</code> (Login.jsx)</td><td>Roll number and password input fields, role selector badge.</td></tr>
+    <tr><td><strong>Fig 7.2</strong></td><td>Administrative Dashboard</td><td><code>activeTab === 'dashboard'</code></td><td>KPI summary cards (Components, Loans, Inside, Overdues).</td></tr>
+    <tr><td><strong>Fig 7.3</strong></td><td>Component Inventory Catalog</td><td><code>activeTab === 'components'</code></td><td>7-category taxonomy filter, available vs issued stock badges.</td></tr>
+    <tr><td><strong>Fig 7.4</strong></td><td>Multi-Item Checkout Desk</td><td><code>activeTab === 'issue'</code></td><td>Student roll selection, item selector, barcode tag assignment.</td></tr>
+    <tr><td><strong>Fig 7.5</strong></td><td>Component Return Desk</td><td><code>activeTab === 'return'</code></td><td>Inspection checklist, partial return quantity controls.</td></tr>
+    <tr><td><strong>Fig 7.6</strong></td><td>Automated Overdue Tracker</td><td><code>activeTab === 'overdue'</code></td><td>"Check Overdues" button, overdue list with severity badges.</td></tr>
+    <tr><td><strong>Fig 7.7</strong></td><td>Student Accounts & Passwords</td><td><code>activeTab === 'students'</code></td><td>Live rows showing Name, Roll, Password (eye toggle), Renewal Year.</td></tr>
+    <tr><td><strong>Fig 7.8</strong></td><td>Smart Lab Relay Controls & HUD</td><td><code>activeTab === 'control'</code></td><td>3x3 Zone Grid (Z1-Z9), GPIO 22 & 23 states, Vacancy timers.</td></tr>
+    <tr><td><strong>Fig 7.9</strong></td><td>Zone-wise Energy Telemetry</td><td><code>activeTab === 'control'</code> (lower)</td><td>PZEM-004T live voltage, current, power, power_consumption table.</td></tr>
+    <tr><td><strong>Fig 7.10</strong></td><td>Lab Entry & Exit Station</td><td><code>activeTab === 'lab_entry_exit'</code></td><td>Student check-in/out form, first-time visit admission fields.</td></tr>
+    <tr><td><strong>Fig 7.11</strong></td><td>Students Currently Inside</td><td><code>activeTab === 'students_inside'</code></td><td>Live active occupants counter, entry timestamps, elapsed stay.</td></tr>
+    <tr><td><strong>Fig 7.12</strong></td><td>Biometric Face Attendance Kiosk</td><td><code>activeTab === 'face_attendance'</code></td><td>Camera viewport, bounding box, InsightFace recognition match.</td></tr>
+    <tr><td><strong>Fig 7.13</strong></td><td>10-Pose Face Enrollment Modal</td><td><code>Students.jsx</code> (Register Face)</td><td>HeadPoseGuide HUD with Yaw/Pitch angles and 10 indicators.</td></tr>
+    <tr><td><strong>Fig 7.14</strong></td><td>Shared Student Project Showcase</td><td><code>activeTab === 'projects'</code></td><td>Shared prototype cards, co-inventor tags, GitHub/demo links.</td></tr>
+    <tr><td><strong>Fig 7.15</strong></td><td>Shared Research Publications Hub</td><td><code>activeTab === 'research_papers'</code></td><td>Academic conference and journal papers, author citations, DOI badges.</td></tr>
+    <tr><td><strong>Fig 7.16</strong></td><td>Student Personal Portal</td><td><code>activeTab === 'student_portal'</code></td><td>Student's active borrowed items, attendance, personal submissions.</td></tr>
+    <tr><td><strong>Fig 7.17</strong></td><td>pgAdmin 4 Database View</td><td>Desktop pgAdmin 4 app</td><td>Object Explorer showing Tables (6) and issued_components grid.</td></tr>
+  </tbody>
+</table>
+
+</body>
+</html>

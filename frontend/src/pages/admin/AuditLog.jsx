@@ -15,6 +15,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { getAuditLogs, subscribeToDb } from '../../db/database';
+import { formatDisplayDate } from '../../utils/dateFormatter';
 
 export default function AuditLog() {
   const [logs, setLogs] = useState([]);
@@ -110,7 +111,7 @@ export default function AuditLog() {
                 logs.map((log) => (
                   <tr key={log.id}>
                     <td className="text-sm">
-                      <div>{new Date(log.timestamp).toLocaleDateString()}</div>
+                      <div>{formatDisplayDate(log.timestamp)}</div>
                       <div className="font-mono text-xs text-muted">
                         {new Date(log.timestamp).toLocaleTimeString()}
                       </div>

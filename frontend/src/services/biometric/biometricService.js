@@ -1,9 +1,10 @@
 // src/services/biometricService.js
-// Hardware Biometric Service: R305 Optical Fingerprint Module & Face Recognition
+// Hardware Biometric Service: Face Recognition & Manual Identification
 // Strictly separates REAL HARDWARE vs SIMULATION/TEST MODE
 // Securely interfaces with Cloudflare Pages Functions (/api/upload, /api/image/[key]) for Private R2 storage
 
 import { getAllUsers } from '../../db/database.js';
+import { faceApiService } from './faceApiService.js';
 
 export const BIOMETRIC_MODES = {
   REAL_HARDWARE: 'REAL_HARDWARE',
@@ -12,11 +13,10 @@ export const BIOMETRIC_MODES = {
 
 class BiometricService {
   constructor() {
-    this.r305Port = null;
-    this.r305Connected = false;
     this.mode = BIOMETRIC_MODES.SIMULATION;
     this.cameraSourceType = 'webcam'; // 'webcam' | 'esp32_cam' | 'custom_url'
     this.esp32CamUrl = 'http://192.168.1.150/stream';
+    this.faceApi = faceApiService;
   }
 
   getMode() {
@@ -27,96 +27,6 @@ class BiometricService {
     if (newMode && BIOMETRIC_MODES[newMode]) {
       this.mode = newMode;
     }
-  }
-
-  // ==================== R305 FINGERPRINT MODULE ====================
-
-  /**
-   * Connect to R305 module via Web Serial API if supported/plugged in,
-   * or communicate via ESP32 UART bridge.
-   */
-  async connectR305() {
-    if (typeof navigator !== 'undefined' && navigator.serial) {
-      try {
-        const port = await navigator.serial.requestPort();
-        await port.open({ baudRate: 57600 });
-        this.r305Port = port;
-        this.r305Connected = true;
-        this.mode = BIOMETRIC_MODES.REAL_HARDWARE;
-        return { success: true, mode: 'web_serial', hardwareMode: BIOMETRIC_MODES.REAL_HARDWARE };
-      } catch (err) {
-        console.warn('Web Serial R305 connection error/canceled:', err);
-      }
-    }
-    // Fallback: ready for ESP32 bridge communication
-    this.r305Connected = true;
-    return { success: true, mode: 'esp32_uart_bridge', hardwareMode: this.mode };
-  }
-
-  /**
-   * Enroll 3 fingerprints for a student.
-   * Prompts the student to place each chosen finger onto the R305 optical prism.
-   * Generates 3 unique template IDs stored in the database without saving raw images!
-   */
-  async enrollThreeFingers(fingerLabels = ['Right Thumb', 'Right Index', 'Left Index'], onStepProgress) {
-    const templateIds = [];
-
-    for (let i = 0; i < 3; i++) {
-      const fingerName = fingerLabels[i] || `Finger ${i + 1}`;
-      if (onStepProgress) {
-        onStepProgress({
-          step: i + 1,
-          total: 3,
-          fingerName,
-          instruction: `Place your ${fingerName} on the R305 optical sensor...`,
-        });
-      }
-
-      // Simulate optical sensor capture delay
-      const delay = this.mode === BIOMETRIC_MODES.REAL_HARDWARE ? 1200 : 700;
-      await new Promise((res) => setTimeout(res, delay));
-
-      const slotId = Math.floor(100 + Math.random() * 899);
-      templateIds.push(slotId);
-    }
-
-    return {
-      success: true,
-      fingerprintIds: templateIds,
-      fingerLabels,
-      mode: this.mode,
-    };
-  }
-
-  /**
-   * Identify student via R305 sensor scan.
-   * Matches scanned finger template against registered student fingerprint slot IDs.
-   */
-  async identifyFingerprint(simulatedSlotId = null) {
-    const users = getAllUsers().filter((u) => u.role === 'student' && u.fingerprintIds?.length > 0);
-    if (users.length === 0) {
-      throw new Error('No students with registered fingerprints found in database.');
-    }
-
-    // Delay to simulate optical prism scan
-    const delay = this.mode === BIOMETRIC_MODES.REAL_HARDWARE ? 1000 : 500;
-    await new Promise((res) => setTimeout(res, delay));
-
-    // If slotId is passed, find matching user, or pick user for demo/testing
-    if (simulatedSlotId) {
-      const matched = users.find((u) => u.fingerprintIds.includes(Number(simulatedSlotId)));
-      if (matched) return { success: true, rollNumber: matched.rollNumber, user: matched, mode: this.mode };
-    }
-
-    // Default to first registered student if testing without physical hardware plugged in
-    const defaultUser = users[0];
-    return {
-      success: true,
-      rollNumber: defaultUser.rollNumber,
-      user: defaultUser,
-      matchedFinger: defaultUser.fingerLabels?.[0] || 'Right Thumb',
-      mode: this.mode,
-    };
   }
 
   // ==================== FACE RECOGNITION & CLOUDFLARE R2 ====================

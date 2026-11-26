@@ -22,6 +22,7 @@ import {
   DollarSign,
   Tag,
   Sparkles,
+  Trash2,
 } from 'lucide-react';
 
 function GithubIcon({ size = 16 }) {
@@ -46,6 +47,7 @@ import {
   getProjects,
   createProject,
   updateProject,
+  deleteProject,
   approveProjectTitleChange,
   getDomains,
   getEceResearchStats,
@@ -150,6 +152,29 @@ export default function Projects({ currentUser, onToast }) {
       }
     } catch (err) {
       onToast(`Approval failed: ${err.message}`);
+    }
+  }
+
+  async function handleDeleteProject(project) {
+    if (!project) return;
+    if (!isSirOrAdmin) {
+      if (onToast) onToast('Access Denied: Only Sir or Admin can delete projects.');
+      return;
+    }
+    const confirmed = window.confirm(
+      `⚠️ PERMANENT PROJECT DELETION:\n\nAre you sure you want to delete the incubation project:\n"${project.title}" (ID: ${project.id})?\n\nThis action cannot be undone and will permanently remove associated milestones, budget records, and references.`
+    );
+    if (!confirmed) return;
+
+    try {
+      await deleteProject(project.id, currentUser);
+      if (onToast) onToast(`Project "${project.title}" deleted permanently.`);
+      if (activeProjectModal && activeProjectModal.id === project.id) {
+        setActiveProjectModal(null);
+      }
+      loadData();
+    } catch (err) {
+      if (onToast) onToast(`Delete failed: ${err.message}`);
     }
   }
 
@@ -515,6 +540,20 @@ export default function Projects({ currentUser, onToast }) {
                       <LinkedinIcon size={16} />
                     </a>
                   )}
+                  {isSirOrAdmin && (
+                    <button
+                      type="button"
+                      className="btn-icon"
+                      style={{ padding: '4px', color: 'var(--danger, #ef4444)' }}
+                      title="Delete Project (Admin/Sir)"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteProject(p);
+                      }}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -705,17 +744,29 @@ export default function Projects({ currentUser, onToast }) {
                 </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.5rem' }}>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => setActiveProjectModal(null)}
-                >
-                  Cancel
-                </button>
-                <button type="submit" className="btn btn-primary">
-                  {isSirOrAdmin ? 'Save Changes' : 'Submit Updates / Title Request'}
-                </button>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', marginTop: '1.5rem', flexWrap: 'wrap' }}>
+                {isSirOrAdmin && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary text-danger"
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', borderColor: '#fca5a5' }}
+                    onClick={() => handleDeleteProject(activeProjectModal)}
+                  >
+                    <Trash2 size={16} /> Delete Project
+                  </button>
+                )}
+                <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.75rem' }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setActiveProjectModal(null)}
+                  >
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn btn-primary">
+                    {isSirOrAdmin ? 'Save Changes' : 'Submit Updates / Title Request'}
+                  </button>
+                </div>
               </div>
             </form>
           </div>

@@ -14,17 +14,30 @@ import {
   Sparkles,
   Users,
   ChevronRight,
+  ExternalLink,
+  Archive,
+  Trash2,
+  Globe,
+  Edit2,
 } from 'lucide-react';
 import {
   getAchievements,
   createAchievement,
+  updateAchievement,
+  deleteAchievement,
   getActiveAnnouncements,
   getAnnouncements,
   createAnnouncement,
+  updateAnnouncement,
+  archiveAnnouncement,
+  deleteAnnouncement,
   getEvents,
   createEvent,
+  updateEvent,
+  deleteEvent,
   subscribeToDb,
 } from '../../db/database';
+import { formatDisplayDate } from '../../utils/dateFormatter';
 
 export default function AchievementsEvents({ currentUser, onToast }) {
   const [activeTab, setActiveTab] = useState('achievements'); // 'achievements', 'announcements', 'events'
@@ -37,24 +50,37 @@ export default function AchievementsEvents({ currentUser, onToast }) {
   const [isAnnouncementModalOpen, setIsAnnouncementModalOpen] = useState(false);
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
 
+  // Edit Modals
+  const [editingAchievement, setEditingAchievement] = useState(null);
+  const [editingAnnouncement, setEditingAnnouncement] = useState(null);
+  const [editingEvent, setEditingEvent] = useState(null);
+
   // Form states
   const [achTitle, setAchTitle] = useState('');
   const [achDesc, setAchDesc] = useState('');
   const [achRoll, setAchRoll] = useState('');
   const [achName, setAchName] = useState('');
   const [achPrize, setAchPrize] = useState(10000);
+  const [achOrg, setAchOrg] = useState('Smart India Hackathon / IEEE');
+  const [achUrl, setAchUrl] = useState('');
+  const [achIsExternal, setAchIsExternal] = useState(true);
 
   const [annTitle, setAnnTitle] = useState('');
   const [annMsg, setAnnMsg] = useState('');
   const [annCategory, setAnnCategory] = useState('General Notice');
   const [annDuration, setAnnDuration] = useState(3);
+  const [annAudience, setAnnAudience] = useState('all');
+  const [annUrl, setAnnUrl] = useState('');
 
   const [evtTitle, setEvtTitle] = useState('');
   const [evtTheme, setEvtTheme] = useState('');
   const [evtDate, setEvtDate] = useState('');
+  const [evtOrganizer, setEvtOrganizer] = useState('VRSEC Incubation Centre & Dept of ECE');
   const [evtPrizes, setEvtPrizes] = useState('₹1,00,000');
   const [evtIsInnovation, setEvtIsInnovation] = useState(true);
   const [evtDesc, setEvtDesc] = useState('');
+  const [evtUrl, setEvtUrl] = useState('');
+  const [evtOutcomes, setEvtOutcomes] = useState('');
 
   const isSirOrAdmin =
     currentUser?.role === 'admin' ||
@@ -84,6 +110,9 @@ export default function AchievementsEvents({ currentUser, onToast }) {
           studentName: achName || achRoll,
           prizeMoney: Number(achPrize) || 0,
           awardedBy: currentUser?.name || 'Dr. K. Venkatesh (Lab Incharge / Sir)',
+          awardingOrganization: achOrg,
+          verificationUrl: achUrl,
+          isExternalAward: achIsExternal,
         },
         currentUser
       );
@@ -93,6 +122,7 @@ export default function AchievementsEvents({ currentUser, onToast }) {
       setAchDesc('');
       setAchRoll('');
       setAchName('');
+      setAchUrl('');
       loadData();
     } catch (err) {
       onToast(`Error awarding achievement: ${err.message}`);
@@ -108,6 +138,8 @@ export default function AchievementsEvents({ currentUser, onToast }) {
           message: annMsg,
           category: annCategory,
           durationDays: Number(annDuration) || 3,
+          targetAudience: annAudience,
+          externalUrl: annUrl,
         },
         currentUser
       );
@@ -115,9 +147,92 @@ export default function AchievementsEvents({ currentUser, onToast }) {
       setIsAnnouncementModalOpen(false);
       setAnnTitle('');
       setAnnMsg('');
+      setAnnUrl('');
       loadData();
     } catch (err) {
       onToast(`Error posting announcement: ${err.message}`);
+    }
+  }
+
+  async function handleArchiveAnnouncement(id) {
+    try {
+      await archiveAnnouncement(id, currentUser);
+      onToast('Announcement archived.');
+      loadData();
+    } catch (err) {
+      onToast(`Archive error: ${err.message}`);
+    }
+  }
+
+  async function handleDeleteAnnouncement(id) {
+    if (!confirm('Are you sure you want to permanently delete this announcement?')) return;
+    try {
+      await deleteAnnouncement(id, currentUser);
+      onToast('Announcement deleted.');
+      loadData();
+    } catch (err) {
+      onToast(`Delete error: ${err.message}`);
+    }
+  }
+
+  async function handleDeleteAchievement(id) {
+    if (!confirm('Are you sure you want to permanently delete this achievement?')) return;
+    try {
+      await deleteAchievement(id, currentUser);
+      onToast('Achievement deleted.');
+      loadData();
+    } catch (err) {
+      onToast(`Delete error: ${err.message}`);
+    }
+  }
+
+  async function handleDeleteEvent(id) {
+    if (!confirm('Are you sure you want to permanently delete this Innovation Day event?')) return;
+    try {
+      await deleteEvent(id, currentUser);
+      onToast('Event deleted.');
+      loadData();
+    } catch (err) {
+      onToast(`Delete error: ${err.message}`);
+    }
+  }
+
+  async function handleSaveEditAchievement(e) {
+    e.preventDefault();
+    if (!editingAchievement) return;
+    try {
+      await updateAchievement(editingAchievement.id, editingAchievement, currentUser);
+      onToast('Achievement updated.');
+      setEditingAchievement(null);
+      loadData();
+    } catch (err) {
+      onToast(`Update error: ${err.message}`);
+    }
+  }
+
+  async function handleSaveEditAnnouncement(e) {
+    e.preventDefault();
+    if (!editingAnnouncement) return;
+    try {
+      await updateAnnouncement(editingAnnouncement.id, editingAnnouncement, currentUser);
+      onToast('Announcement updated.');
+      setEditingAnnouncement(null);
+      loadData();
+    } catch (err) {
+      onToast(`Update error: ${err.message}`);
+    }
+  }
+
+  async function handleSaveEditEvent(e) {
+    e.preventDefault();
+    if (!editingEvent) return;
+    try {
+      await updateEvent(editingEvent.id, editingEvent, currentUser);
+      onToast('Event updated.');
+      setEditingEvent(null);
+      loadData();
+    } catch (err) {
+      onToast(`Update error: ${err.message}`);
     }
   }
 
@@ -129,9 +244,12 @@ export default function AchievementsEvents({ currentUser, onToast }) {
           title: evtTitle,
           theme: evtTheme,
           eventDate: evtDate,
+          organizer: evtOrganizer,
           prizes: evtPrizes,
           isInnovationDay: evtIsInnovation,
           description: evtDesc,
+          externalUrl: evtUrl,
+          outcomes: evtOutcomes,
         },
         currentUser
       );
@@ -140,6 +258,8 @@ export default function AchievementsEvents({ currentUser, onToast }) {
       setEvtTitle('');
       setEvtTheme('');
       setEvtDate('');
+      setEvtUrl('');
+      setEvtOutcomes('');
       loadData();
     } catch (err) {
       onToast(`Error creating event: ${err.message}`);
@@ -289,15 +409,56 @@ export default function AchievementsEvents({ currentUser, onToast }) {
                   </div>
                 )}
 
+                {ach.awardingOrganization && (
+                  <div className="flex-between" style={{ marginBottom: '0.35rem' }}>
+                    <span className="text-xs text-muted">Organization:</span>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>{ach.awardingOrganization}</span>
+                  </div>
+                )}
+
                 <div className="flex-between">
                   <span className="text-xs text-muted">Awarded By:</span>
                   <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>{ach.awardedBy}</span>
                 </div>
               </div>
 
-              <div style={{ fontSize: '0.75rem', color: 'var(--neutral-400)', textAlign: 'right' }}>
-                Award Date: {new Date(ach.dateAwarded).toLocaleDateString()}
+              <div className="flex-between" style={{ fontSize: '0.75rem', color: 'var(--neutral-400)' }}>
+                {ach.verificationUrl ? (
+                  <a
+                    href={ach.verificationUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary flex-center"
+                    style={{ gap: '4px', textDecoration: 'underline' }}
+                  >
+                    <ExternalLink size={12} /> Verify Credential
+                  </a>
+                ) : <span />}
+                <span>Award Date: {formatDisplayDate(ach.dateAwarded)}</span>
               </div>
+
+              {isSirOrAdmin && (
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.75rem', borderTop: '1px solid #fef3c7', paddingTop: '0.5rem' }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
+                    onClick={() => setEditingAchievement({ ...ach })}
+                    title="Edit Achievement"
+                  >
+                    <Edit2 size={12} style={{ marginRight: '3px' }} /> Edit
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-danger btn-sm"
+                    style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
+                    onClick={() => handleDeleteAchievement(ach.id)}
+                    title="Delete Achievement"
+                  >
+                    <Trash2 size={12} style={{ marginRight: '3px' }} /> Delete
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -335,7 +496,7 @@ export default function AchievementsEvents({ currentUser, onToast }) {
                           ⏱ Expires in {daysRemaining} day{daysRemaining === 1 ? '' : 's'}
                         </span>
                       </div>
-                      <span className="text-xs text-muted">{new Date(ann.createdAt).toLocaleDateString()}</span>
+                      <span className="text-xs text-muted">{formatDisplayDate(ann.createdAt)}</span>
                     </div>
 
                     <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--neutral-900)', marginBottom: '0.35rem' }}>
@@ -345,8 +506,58 @@ export default function AchievementsEvents({ currentUser, onToast }) {
                       {ann.message}
                     </p>
 
-                    <div style={{ fontSize: '0.78rem', color: 'var(--neutral-500)', marginTop: '0.5rem' }}>
-                      Posted by: <strong>{ann.createdBy}</strong>
+                    <div className="flex-between" style={{ fontSize: '0.78rem', color: 'var(--neutral-500)', marginTop: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <span>Posted by: <strong>{ann.createdBy}</strong></span>
+                        {ann.targetAudience && (
+                          <span style={{ background: '#e2e8f0', padding: '0.15rem 0.4rem', borderRadius: 4, fontSize: '0.7rem' }}>
+                            Audience: {ann.targetAudience}
+                          </span>
+                        )}
+                        {ann.externalUrl && (
+                          <a
+                            href={ann.externalUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-primary flex-center"
+                            style={{ gap: '3px', textDecoration: 'underline' }}
+                          >
+                            <ExternalLink size={12} /> External Link
+                          </a>
+                        )}
+                      </div>
+
+                      {isSirOrAdmin && (
+                        <div style={{ display: 'flex', gap: '0.4rem' }}>
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm"
+                            style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
+                            onClick={() => setEditingAnnouncement({ ...ann })}
+                            title="Edit Notice"
+                          >
+                            <Edit2 size={12} style={{ marginRight: '3px' }} /> Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm"
+                            style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
+                            onClick={() => handleArchiveAnnouncement(ann.id)}
+                            title="Archive Notice"
+                          >
+                            <Archive size={12} style={{ marginRight: '3px' }} /> Archive
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-danger btn-sm"
+                            style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
+                            onClick={() => handleDeleteAnnouncement(ann.id)}
+                            title="Delete Notice"
+                          >
+                            <Trash2 size={12} style={{ marginRight: '3px' }} /> Delete
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -397,7 +608,7 @@ export default function AchievementsEvents({ currentUser, onToast }) {
                   <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#16a34a' }}>
                     Prizes: {evt.prizes}
                   </div>
-                  <div className="text-xs text-muted">{new Date(evt.eventDate).toLocaleDateString()}</div>
+                  <div className="text-xs text-muted">{formatDisplayDate(evt.eventDate)}</div>
                 </div>
               </div>
 
@@ -428,6 +639,54 @@ export default function AchievementsEvents({ currentUser, onToast }) {
                   </div>
                 </div>
               )}
+              {evt.organizer && (
+                <div style={{ fontSize: '0.8rem', color: 'var(--neutral-500)', marginTop: '0.5rem' }}>
+                  Organized by: <strong>{evt.organizer}</strong>
+                </div>
+              )}
+              {evt.outcomes && (
+                <div style={{ fontSize: '0.8rem', color: 'var(--neutral-600)', marginTop: '0.25rem' }}>
+                  Key Outcomes: {evt.outcomes}
+                </div>
+              )}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.6rem', marginTop: '1rem', borderTop: '1px solid var(--neutral-200)', paddingTop: '0.85rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  {(evt.registrationUrl || evt.externalUrl) && (
+                    <a
+                      href={evt.registrationUrl || evt.externalUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn btn-primary btn-sm"
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.78rem' }}
+                    >
+                      <ExternalLink size={13} /> Register Now
+                    </a>
+                  )}
+                </div>
+
+                {isSirOrAdmin && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginLeft: 'auto' }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      style={{ padding: '0.25rem 0.55rem', fontSize: '0.75rem' }}
+                      onClick={() => setEditingEvent({ ...evt })}
+                      title="Edit Innovation Event"
+                    >
+                      <Edit2 size={12} style={{ marginRight: '3px' }} /> Edit
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-danger btn-sm"
+                      style={{ padding: '0.25rem 0.55rem', fontSize: '0.75rem' }}
+                      onClick={() => handleDeleteEvent(evt.id)}
+                      title="Delete Innovation Event"
+                    >
+                      <Trash2 size={12} style={{ marginRight: '3px' }} /> Delete
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -485,15 +744,52 @@ export default function AchievementsEvents({ currentUser, onToast }) {
                 </div>
               </div>
 
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                <div className="form-group">
+                  <label className="input-label" htmlFor="achOrg">Awarding Organization</label>
+                  <input
+                    id="achOrg"
+                    type="text"
+                    className="input-field"
+                    placeholder="e.g. AICTE / IEEE / Govt of India"
+                    value={achOrg}
+                    onChange={(e) => setAchOrg(e.target.value)}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="input-label" htmlFor="achPrize">Prize Money (₹)</label>
+                  <input
+                    id="achPrize"
+                    type="number"
+                    className="input-field"
+                    value={achPrize}
+                    onChange={(e) => setAchPrize(e.target.value)}
+                  />
+                </div>
+              </div>
+
               <div className="form-group" style={{ marginBottom: '1rem' }}>
-                <label className="input-label" htmlFor="achPrize">Prize Money (₹)</label>
+                <label className="input-label" htmlFor="achUrl">Verification Link / Certificate URL (Optional)</label>
                 <input
-                  id="achPrize"
-                  type="number"
+                  id="achUrl"
+                  type="url"
                   className="input-field"
-                  value={achPrize}
-                  onChange={(e) => setAchPrize(e.target.value)}
+                  placeholder="https://hackathon.gov.in/winners/2026..."
+                  value={achUrl}
+                  onChange={(e) => setAchUrl(e.target.value)}
                 />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.88rem', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={achIsExternal}
+                    onChange={(e) => setAchIsExternal(e.target.checked)}
+                  />
+                  <span>External / National Level Honor (Received outside VRSEC)</span>
+                </label>
               </div>
 
               <div className="form-group" style={{ marginBottom: '1.25rem' }}>
@@ -580,6 +876,35 @@ export default function AchievementsEvents({ currentUser, onToast }) {
                     <option value={5}>5 Days</option>
                     <option value={7}>7 Days</option>
                   </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                <div className="form-group">
+                  <label className="input-label" htmlFor="annAudience">Target Audience</label>
+                  <select
+                    id="annAudience"
+                    className="input-field"
+                    value={annAudience}
+                    onChange={(e) => setAnnAudience(e.target.value)}
+                  >
+                    <option value="all">All Members & Visitors</option>
+                    <option value="students">Students Only</option>
+                    <option value="admins">Admin / Lab Incharges</option>
+                    <option value="faculty">Faculty Mentors</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="input-label" htmlFor="annUrl">External Link (Optional)</label>
+                  <input
+                    id="annUrl"
+                    type="url"
+                    className="input-field"
+                    placeholder="https://..."
+                    value={annUrl}
+                    onChange={(e) => setAnnUrl(e.target.value)}
+                  />
                 </div>
               </div>
 
@@ -675,6 +1000,43 @@ export default function AchievementsEvents({ currentUser, onToast }) {
                 </div>
               </div>
 
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                <div className="form-group">
+                  <label className="input-label" htmlFor="evtOrganizer">Organizer</label>
+                  <input
+                    id="evtOrganizer"
+                    type="text"
+                    className="input-field"
+                    value={evtOrganizer}
+                    onChange={(e) => setEvtOrganizer(e.target.value)}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="input-label" htmlFor="evtUrl">External / Registration Link</label>
+                  <input
+                    id="evtUrl"
+                    type="url"
+                    className="input-field"
+                    placeholder="https://..."
+                    value={evtUrl}
+                    onChange={(e) => setEvtUrl(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label className="input-label" htmlFor="evtOutcomes">Key Outcomes / Highlights</label>
+                <input
+                  id="evtOutcomes"
+                  type="text"
+                  className="input-field"
+                  placeholder="e.g. 40 prototypes presented, 3 patents filed"
+                  value={evtOutcomes}
+                  onChange={(e) => setEvtOutcomes(e.target.value)}
+                />
+              </div>
+
               <div className="form-group" style={{ marginBottom: '1.25rem' }}>
                 <label className="input-label" htmlFor="evtDesc">Description</label>
                 <textarea
@@ -696,6 +1058,291 @@ export default function AchievementsEvents({ currentUser, onToast }) {
                 </button>
                 <button type="submit" className="btn btn-primary">
                   Save Event
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT ACHIEVEMENT MODAL */}
+      {editingAchievement && (
+        <div className="modal-backdrop" style={{ zIndex: 1100 }} onClick={() => setEditingAchievement(null)}>
+          <div className="modal-content" style={{ maxWidth: '520px', width: '100%' }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex-between" style={{ marginBottom: '1.25rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Edit2 size={22} className="text-primary" />
+                <h3 style={{ fontSize: '1.2rem', fontWeight: 800 }}>Edit Achievement</h3>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveEditAchievement}>
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label className="input-label">Achievement / Honor Title *</label>
+                <input
+                  type="text"
+                  className="input-field"
+                  value={editingAchievement.title || ''}
+                  onChange={(e) => setEditingAchievement({ ...editingAchievement, title: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                <div className="form-group">
+                  <label className="input-label">Awardee Roll Number</label>
+                  <input
+                    type="text"
+                    className="input-field uppercase-input"
+                    value={editingAchievement.awardedToRoll || ''}
+                    onChange={(e) => setEditingAchievement({ ...editingAchievement, awardedToRoll: e.target.value.toUpperCase() })}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="input-label">Student Name</label>
+                  <input
+                    type="text"
+                    className="input-field"
+                    value={editingAchievement.studentName || ''}
+                    onChange={(e) => setEditingAchievement({ ...editingAchievement, studentName: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                <div className="form-group">
+                  <label className="input-label">Prize / Grant Money (₹)</label>
+                  <input
+                    type="number"
+                    className="input-field"
+                    value={editingAchievement.prizeMoney || 0}
+                    onChange={(e) => setEditingAchievement({ ...editingAchievement, prizeMoney: Number(e.target.value) })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="input-label">Awarding Organization</label>
+                  <input
+                    type="text"
+                    className="input-field"
+                    value={editingAchievement.awardingOrganization || ''}
+                    onChange={(e) => setEditingAchievement({ ...editingAchievement, awardingOrganization: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label className="input-label">Verification / Certificate URL</label>
+                <input
+                  type="url"
+                  className="input-field"
+                  value={editingAchievement.verificationUrl || ''}
+                  onChange={(e) => setEditingAchievement({ ...editingAchievement, verificationUrl: e.target.value })}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '1.25rem' }}>
+                <label className="input-label">Description / Citation</label>
+                <textarea
+                  className="input-field"
+                  rows={3}
+                  value={editingAchievement.description || ''}
+                  onChange={(e) => setEditingAchievement({ ...editingAchievement, description: e.target.value })}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setEditingAchievement(null)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  Save Updates
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT ANNOUNCEMENT MODAL */}
+      {editingAnnouncement && (
+        <div className="modal-backdrop" style={{ zIndex: 1100 }} onClick={() => setEditingAnnouncement(null)}>
+          <div className="modal-content" style={{ maxWidth: '520px', width: '100%' }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex-between" style={{ marginBottom: '1.25rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Edit2 size={22} className="text-primary" />
+                <h3 style={{ fontSize: '1.2rem', fontWeight: 800 }}>Edit Announcement</h3>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveEditAnnouncement}>
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label className="input-label">Title *</label>
+                <input
+                  type="text"
+                  className="input-field"
+                  value={editingAnnouncement.title || ''}
+                  onChange={(e) => setEditingAnnouncement({ ...editingAnnouncement, title: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                <div className="form-group">
+                  <label className="input-label">Category</label>
+                  <select
+                    className="input-field"
+                    value={editingAnnouncement.category || 'General Notice'}
+                    onChange={(e) => setEditingAnnouncement({ ...editingAnnouncement, category: e.target.value })}
+                  >
+                    <option value="General Notice">General Notice</option>
+                    <option value="Lab Timings">Lab Timings</option>
+                    <option value="Component Shortage">Component Shortage</option>
+                    <option value="Project Submissions">Project Submissions</option>
+                    <option value="Hackathon Alert">Hackathon Alert</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="input-label">Audience</label>
+                  <select
+                    className="input-field"
+                    value={editingAnnouncement.targetAudience || 'all'}
+                    onChange={(e) => setEditingAnnouncement({ ...editingAnnouncement, targetAudience: e.target.value })}
+                  >
+                    <option value="all">All Students & Staff</option>
+                    <option value="students">Students Only</option>
+                    <option value="staff">Staff Only</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label className="input-label">External Action URL</label>
+                <input
+                  type="url"
+                  className="input-field"
+                  value={editingAnnouncement.externalUrl || ''}
+                  onChange={(e) => setEditingAnnouncement({ ...editingAnnouncement, externalUrl: e.target.value })}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '1.25rem' }}>
+                <label className="input-label">Message *</label>
+                <textarea
+                  className="input-field"
+                  rows={4}
+                  value={editingAnnouncement.message || ''}
+                  onChange={(e) => setEditingAnnouncement({ ...editingAnnouncement, message: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setEditingAnnouncement(null)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT EVENT MODAL */}
+      {editingEvent && (
+        <div className="modal-backdrop" style={{ zIndex: 1100 }} onClick={() => setEditingEvent(null)}>
+          <div className="modal-content" style={{ maxWidth: '580px', width: '100%', maxHeight: '90vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex-between" style={{ marginBottom: '1.25rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Edit2 size={22} className="text-primary" />
+                <h3 style={{ fontSize: '1.2rem', fontWeight: 800 }}>Edit Event</h3>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveEditEvent}>
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label className="input-label">Event Title *</label>
+                <input
+                  type="text"
+                  className="input-field"
+                  value={editingEvent.title || ''}
+                  onChange={(e) => setEditingEvent({ ...editingEvent, title: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                <div className="form-group">
+                  <label className="input-label">Event Date *</label>
+                  <input
+                    type="date"
+                    className="input-field"
+                    value={editingEvent.eventDate ? editingEvent.eventDate.split('T')[0] : ''}
+                    onChange={(e) => setEditingEvent({ ...editingEvent, eventDate: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="input-label">Theme</label>
+                  <input
+                    type="text"
+                    className="input-field"
+                    value={editingEvent.theme || ''}
+                    onChange={(e) => setEditingEvent({ ...editingEvent, theme: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                <div className="form-group">
+                  <label className="input-label">Total Cash Prizes</label>
+                  <input
+                    type="text"
+                    className="input-field"
+                    value={editingEvent.prizes || ''}
+                    onChange={(e) => setEditingEvent({ ...editingEvent, prizes: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="input-label">Registration / External Link</label>
+                  <input
+                    type="url"
+                    className="input-field"
+                    placeholder="https://..."
+                    value={editingEvent.externalUrl || editingEvent.registrationUrl || ''}
+                    onChange={(e) => setEditingEvent({ ...editingEvent, externalUrl: e.target.value, registrationUrl: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label className="input-label">Key Outcomes / Highlights</label>
+                <input
+                  type="text"
+                  className="input-field"
+                  value={editingEvent.outcomes || ''}
+                  onChange={(e) => setEditingEvent({ ...editingEvent, outcomes: e.target.value })}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '1.25rem' }}>
+                <label className="input-label">Description</label>
+                <textarea
+                  className="input-field"
+                  rows={3}
+                  value={editingEvent.description || ''}
+                  onChange={(e) => setEditingEvent({ ...editingEvent, description: e.target.value })}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setEditingEvent(null)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  Save Changes
                 </button>
               </div>
             </form>

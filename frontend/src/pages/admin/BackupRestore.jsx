@@ -55,6 +55,7 @@ export default function BackupRestore({ onToast }) {
   // Storage Protection & Retention State
   const [storageStatus, setStorageStatus] = useState(getDatabaseStorageStatus());
   const [retentionAudit, setRetentionAudit] = useState(getStudentsRetentionAudit());
+  const [hasDownloadedArchive, setHasDownloadedArchive] = useState(false);
 
   const [pruneResult, setPruneResult] = useState(null);
   const [statusMessage, setStatusMessage] = useState(null);

@@ -14,6 +14,9 @@ import {
   Bell,
   Mail,
   Phone,
+  Database,
+  Search,
+  RefreshCw,
 } from 'lucide-react';
 import {
   getTransactions,
@@ -24,6 +27,7 @@ import {
   updateSettings,
   subscribeToDb,
 } from '../../db/database';
+import { formatDisplayDate } from '../../utils/dateFormatter';
 
 export default function Overdue({ setActiveTab, onToast, onOpenReturnWithRoll }) {
   const [transactions, setTransactions] = useState([]);
@@ -32,8 +36,15 @@ export default function Overdue({ setActiveTab, onToast, onOpenReturnWithRoll })
   const [isEditingSettings, setIsEditingSettings] = useState(false);
   const [tempDefaultDays, setTempDefaultDays] = useState(7);
 
+  // PostgreSQL Overdue Tracker states
+  const [pgOverdueList, setPgOverdueList] = useState([]);
+  const [isChecking, setIsChecking] = useState(false);
+  const [hasCheckedDb, setHasCheckedDb] = useState(false);
+  const [lastCheckedTime, setLastCheckedTime] = useState(null);
+
   useEffect(() => {
     loadData();
+    fetchPgOverdues();
     const unsubscribe = subscribeToDb(() => loadData());
     return () => unsubscribe();
   }, []);
@@ -44,6 +55,52 @@ export default function Overdue({ setActiveTab, onToast, onOpenReturnWithRoll })
     const currSettings = getSettings();
     setSettings(currSettings);
     setTempDefaultDays(currSettings.defaultOverdueDays || 7);
+  }
+
+  async function fetchPgOverdues() {
+    try {
+      const res = await fetch('/api/overdue-components');
+      if (res.ok) {
+        const json = await res.json();
+        if (Array.isArray(json.data) && json.data.length > 0) {
+          setPgOverdueList(json.data);
+          setHasCheckedDb(true);
+        }
+      }
+    } catch (err) {
+      console.warn('Could not fetch PostgreSQL overdues:', err);
+    }
+  }
+
+  async function handleCheckOverdues() {
+    setIsChecking(true);
+    try {
+      const res = await fetch('/api/check-overdues', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const overdues = json.data || [];
+        setPgOverdueList(overdues);
+        setHasCheckedDb(true);
+        setLastCheckedTime(new Date());
+        if (onToast) {
+          onToast(
+            overdues.length > 0
+              ? `Check Overdues complete! Found ${overdues.length} student(s) past end date (stored in PostgreSQL).`
+              : 'Check Overdues complete! Zero students currently past end date.'
+          );
+        }
+      } else {
+        throw new Error('Failed to check overdues in database');
+      }
+    } catch (err) {
+      console.error('Check overdues error:', err);
+      if (onToast) onToast('Failed to check overdues: ' + err.message);
+    } finally {
+      setIsChecking(false);
+    }
   }
 
   function handleSaveSettings(e) {
@@ -95,8 +152,38 @@ export default function Overdue({ setActiveTab, onToast, onOpenReturnWithRoll })
     }
   }
 
+  // Merge items from PostgreSQL public.overdue_components with local records
+  const effectiveItems = [...itemRecords];
+  if (hasCheckedDb && Array.isArray(pgOverdueList)) {
+    for (const pgItem of pgOverdueList) {
+      const exists = effectiveItems.some(
+        (local) => local.txnId === pgItem.transaction_id && local.componentId === pgItem.component_id
+      );
+      if (!exists) {
+        effectiveItems.push({
+          txnId: pgItem.transaction_id,
+          studentName: pgItem.student_name,
+          studentRoll: pgItem.registration_number,
+          phone: pgItem.phone_number,
+          componentId: pgItem.component_id,
+          componentName: pgItem.component_name,
+          category: pgItem.category,
+          remainingQuantity: pgItem.remaining_quantity,
+          individualIds: pgItem.individual_ids || [],
+          issueDate: pgItem.issue_date,
+          dueDate: pgItem.due_date,
+          isLate: true,
+          overdueDays: pgItem.overdue_days,
+          remainingDays: 0,
+          severity: pgItem.severity,
+          fromPg: true,
+        });
+      }
+    }
+  }
+
   // Filter items
-  const filteredItems = itemRecords.filter((rec) => {
+  const filteredItems = effectiveItems.filter((rec) => {
     if (filterSeverity === 'all') return rec.isLate || rec.severity === 'duesoon';
     if (filterSeverity === 'critical') return rec.severity === 'critical';
     if (filterSeverity === 'moderate') return rec.severity === 'moderate';
@@ -104,9 +191,9 @@ export default function Overdue({ setActiveTab, onToast, onOpenReturnWithRoll })
     return true;
   });
 
-  const criticalCount = itemRecords.filter((r) => r.severity === 'critical').length;
-  const moderateCount = itemRecords.filter((r) => r.severity === 'moderate').length;
-  const dueSoonCount = itemRecords.filter((r) => r.severity === 'duesoon').length;
+  const criticalCount = effectiveItems.filter((r) => r.severity === 'critical').length;
+  const moderateCount = effectiveItems.filter((r) => r.severity === 'moderate').length;
+  const dueSoonCount = effectiveItems.filter((r) => r.severity === 'duesoon').length;
 
   return (
     <div>
@@ -121,14 +208,48 @@ export default function Overdue({ setActiveTab, onToast, onOpenReturnWithRoll })
           </p>
         </div>
 
-        <button
-          type="button"
-          className="btn btn-secondary"
-          onClick={() => setIsEditingSettings(!isEditingSettings)}
-        >
-          <Sliders size={16} /> Configure Loan Durations
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={isChecking}
+            onClick={handleCheckOverdues}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontWeight: 700 }}
+          >
+            <RefreshCw size={16} className={isChecking ? 'spin' : ''} />
+            {isChecking ? 'Scanning Issued Table in DB...' : 'Check Overdues'}
+          </button>
+          <span className="badge badge-success" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.45rem 0.75rem', fontSize: '0.8rem' }}>
+            <Database size={14} /> PostgreSQL Connected (public.overdue_components)
+          </span>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => setIsEditingSettings(!isEditingSettings)}
+          >
+            <Sliders size={16} /> Configure Loan Durations
+          </button>
+        </div>
       </div>
+
+      {/* OVERDUE SCAN SUMMARY BANNER */}
+      {hasCheckedDb && (
+        <div className="card" style={{ background: '#f8fafc', border: '1px solid #cbd5e1', marginBottom: '1.25rem', padding: '0.75rem 1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <CheckCircle size={16} style={{ color: 'var(--success)' }} />
+              <span style={{ fontSize: '0.9rem', color: '#1e293b' }}>
+                Scanned <strong>public.issued_components</strong> end dates. Identified <strong>{pgOverdueList.length}</strong> overdue loan(s) stored in <strong>public.overdue_components</strong>.
+              </span>
+            </div>
+            {lastCheckedTime && (
+              <span className="text-xs text-muted">
+                Last checked: {lastCheckedTime.toLocaleTimeString()}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* OVERDUE DURATION SETTINGS DRAWER */}
       {isEditingSettings && (
@@ -272,11 +393,11 @@ export default function Overdue({ setActiveTab, onToast, onOpenReturnWithRoll })
           <table className="table">
             <thead>
               <tr>
-                <th>Student</th>
+                <th>Student Details</th>
                 <th>Component & Physical Tag(s)</th>
                 <th>Qty Outstanding</th>
                 <th>Issue Date</th>
-                <th>Due Date</th>
+                <th>End Date (Due Date)</th>
                 <th>Status / Days Overdue</th>
                 <th style={{ textAlign: 'right' }}>Action</th>
               </tr>
@@ -290,8 +411,13 @@ export default function Overdue({ setActiveTab, onToast, onOpenReturnWithRoll })
                         {item.studentName}
                       </div>
                       <div className="font-mono text-xs text-muted">
-                        {item.studentRoll}
+                        Roll: {item.studentRoll}
                       </div>
+                      {item.phone && (
+                        <div className="text-xs" style={{ color: '#0369a1', display: 'flex', alignItems: 'center', gap: '0.25rem', marginTop: '0.15rem' }}>
+                          <Phone size={11} /> {item.phone}
+                        </div>
+                      )}
                     </td>
                     <td>
                       <div style={{ fontWeight: 600 }}>{item.componentName}</div>
@@ -310,10 +436,10 @@ export default function Overdue({ setActiveTab, onToast, onOpenReturnWithRoll })
                       </strong>
                     </td>
                     <td className="text-sm">
-                      {new Date(item.issueDate).toLocaleDateString()}
+                      {formatDisplayDate(item.issueDate)}
                     </td>
                     <td className="text-sm">
-                      <strong>{new Date(item.dueDate).toLocaleDateString()}</strong>
+                      <strong>{formatDisplayDate(item.dueDate)}</strong>
                     </td>
                     <td>
                       {item.severity === 'critical' && (

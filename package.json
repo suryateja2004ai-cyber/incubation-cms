@@ -11,10 +11,11 @@
     "build": "npm --prefix frontend run build",
     "preview": "npm --prefix frontend run preview",
     "lint": "npm --prefix frontend run lint",
-    "test": "node tests/unit/test_waveform_decoder.mjs && node tests/unit/test_barcode_robustness.mjs && node tests/integration/test_student_id_scan.mjs",
-    "test:unit": "node tests/unit/test_waveform_decoder.mjs && node tests/unit/test_barcode_robustness.mjs",
-    "test:integration": "node tests/integration/test_student_id_scan.mjs",
-    "test:ocr": "python tests/integration/test_ocr_api.py",
-    "ocr:start": "cd backend/ocr && python -m uvicorn ocr_server:app --host 127.0.0.1 --port 8000"
+    "test": "node tests/unit/test_global_admin_presence.mjs && node tests/unit/test_zero_blank_protection.mjs && node tests/unit/test_seven_category_inventory.mjs && node tests/unit/test_tab_control_fix.mjs && node tests/unit/test_student_lab_controls.mjs && node tests/unit/test_analytics_dashboard.mjs && node tests/unit/test_pwa_qr_conversion.mjs && node tests/unit/test_students_page_render.mjs && node tests/unit/test_student_login_reconciliation.mjs && node tests/integration/test_smart_incubation_system.mjs && node tests/integration/test_face_attendance.mjs && node tests/unit/test_master_fixes.mjs && node tests/unit/test_three_changes.mjs && node tests/security/test_negative_security_and_offline_sync.mjs && node tests/unit/test_zone_gesture_control.mjs",
+    "test:zone": "node tests/unit/test_zone_gesture_control.mjs",
+    "test:system": "node tests/integration/test_smart_incubation_system.mjs",
+    "test:face": "python tests/integration/test_face_api.py && node tests/integration/test_face_attendance.mjs",
+    "face:start": "cd backend/face && python -m uvicorn face_server:app --host 127.0.0.1 --port 8001 --reload",
+    "pg:start": "node backend/postgres_server.js"
   }
 }

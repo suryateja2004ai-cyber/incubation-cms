@@ -5,7 +5,7 @@
 // Biometric Entrance Station Kiosk Mode, Global Camera OCR Modal, and Reactive State Container.
 
 import React, { useState, useEffect } from 'react';
-import { Clock } from 'lucide-react';
+import { Clock, AlertTriangle } from 'lucide-react';
 import {
   initDatabase,
   getDashboardStats,
@@ -20,8 +20,6 @@ import {
 
 import Navbar from '../components/layout/Navbar';
 import Sidebar from '../components/layout/Sidebar';
-import CameraModal from '../components/ocr/CameraModal';
-import BarcodeScannerModal from '../components/barcode/BarcodeScannerModal';
 import VoiceSearchModal from '../components/search/VoiceSearchModal';
 
 // Pages
@@ -36,6 +34,7 @@ import Transactions from '../pages/admin/Transactions';
 import Students from '../pages/admin/Students';
 import StudentsInside from '../pages/lab/StudentsInside';
 import LabEntryExit from '../pages/lab/LabEntryExit';
+import FaceAttendance from '../pages/lab/FaceAttendance';
 import Analytics from '../pages/admin/Analytics';
 import AuditLog from '../pages/admin/AuditLog';
 import StudentPortal from '../pages/student/StudentPortal';
@@ -46,6 +45,10 @@ import Complaints from '../pages/complaints/Complaints';
 import AchievementsEvents from '../pages/events/AchievementsEvents';
 import ResearchPapers from '../pages/research/ResearchPapers';
 import DomainsHolidays from '../pages/admin/DomainsHolidays';
+import ErrorBoundary from '../components/common/ErrorBoundary';
+import QrEntryChoiceModal from '../components/common/QrEntryChoiceModal';
+import { GuidedTourProvider, useGuidedTour } from '../components/tour/GuidedTourContext';
+import GuidedTourHost from '../components/tour/GuidedTourHost';
 
 export default function App() {
   const [isDbLoaded, setIsDbLoaded] = useState(false);
@@ -61,12 +64,7 @@ export default function App() {
   // Standalone Biometric Entrance Station Kiosk Mode (can be launched from login)
   const [isEntranceStationKiosk, setIsEntranceStationKiosk] = useState(false);
 
-  // Global Camera OCR Modal state
-  const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
   const [scannedStudentData, setScannedStudentData] = useState(null);
-
-  // Student ID Card Barcode / QR Scanner Modal state
-  const [isBarcodeScannerOpen, setIsBarcodeScannerOpen] = useState(false);
 
   // Voice Search Modal state
   const [isVoiceSearchOpen, setIsVoiceSearchOpen] = useState(false);
@@ -82,6 +80,10 @@ export default function App() {
   const [dismissedRetentionRolls, setDismissedRetentionRolls] = useState(new Set());
   const [activeRetentionPromptStudent, setActiveRetentionPromptStudent] = useState(null);
 
+  // QR Code Access Choice Screen ("Install as App" vs "Continue on Web")
+  const [showQrChoiceModal, setShowQrChoiceModal] = useState(false);
+  const [deferredInstallPrompt, setDeferredInstallPrompt] = useState(null);
+
   function addToast(message) {
     const id = Date.now() + Math.random();
     setToasts((prev) => [...prev, { id, message }]);
@@ -90,19 +92,74 @@ export default function App() {
     }, 4500);
   }
 
+  // Detect QR Code Entry (?entry=qr) and Capture PWA install prompt
+  useEffect(() => {
+    function handleBeforeInstallPrompt(e) {
+      e.preventDefault();
+      setDeferredInstallPrompt(e);
+    }
+    if (typeof window !== 'undefined') {
+      window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+      try {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('entry') === 'qr') {
+          setShowQrChoiceModal(true);
+        }
+      } catch (err) {
+        // Fallback for older browsers
+      }
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      }
+    };
+  }, []);
+
+  function handleDismissQrChoice() {
+    setShowQrChoiceModal(false);
+    if (typeof window !== 'undefined' && window.history?.replaceState) {
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('entry');
+        const cleanUrl = url.pathname + (url.search ? url.search : '') + url.hash;
+        window.history.replaceState({}, document.title, cleanUrl);
+      } catch (e) {
+        // Safe fallback
+      }
+    }
+  }
+
   // Initialize offline IndexedDB database on startup
   useEffect(() => {
+    let isMounted = true;
+
+    // Safety watchdog: ensure splash screen NEVER stays longer than 600ms under any circumstance
+    const watchdogTimer = setTimeout(() => {
+      if (isMounted) {
+        setIsDbLoaded(true);
+      }
+    }, 600);
+
     async function setupDb() {
       try {
         await initDatabase();
+        if (!isMounted) return;
         const user = getCurrentUser();
         setCurrentUserState(user);
+        if (user?.role === 'student') {
+          setActiveTab('student_portal');
+        }
         setDashboardStats(getDashboardStats());
         setSettings(getSettings());
         setIsDbLoaded(true);
       } catch (err) {
         console.error('Database initialization error:', err);
-        setIsDbLoaded(true);
+        if (isMounted) setIsDbLoaded(true);
+      } finally {
+        clearTimeout(watchdogTimer);
       }
     }
     setupDb();
@@ -114,7 +171,11 @@ export default function App() {
         setCurrentUserState(data);
       }
     });
-    return () => unsubscribe();
+    return () => {
+      isMounted = false;
+      clearTimeout(watchdogTimer);
+      unsubscribe();
+    };
   }, []);
 
   // Automatic Retention Expiration Detection
@@ -159,16 +220,7 @@ export default function App() {
     }
   }
 
-  // Handle OCR scan confirmation from global camera modal
-  function handleOcrConfirm(studentDetails) {
-    setScannedStudentData(studentDetails);
-    addToast(`ID Card Scanned: ${studentDetails.name} (${studentDetails.rollNumber})`);
 
-    setMainTab('management');
-    if (activeTab !== 'issue' && activeTab !== 'return') {
-      setActiveTab('issue');
-    }
-  }
 
   function handleOpenReturnWithRoll(roll) {
     setScannedStudentData({ rollNumber: roll, name: '' });
@@ -188,14 +240,15 @@ export default function App() {
     addToast(`Welcome, ${user.name} (${user.role === 'student' ? user.rollNumber : user.role})!`);
     if (user.role === 'student') {
       setMainTab('management'); // Student Portal
+      setActiveTab('student_portal');
     } else {
       setMainTab('management');
       setActiveTab('dashboard');
     }
   }
 
-  function handleLogout() {
-    logoutUser();
+  async function handleLogout() {
+    await logoutUser();
     setCurrentUserState(null);
     addToast('You have been signed out.');
   }
@@ -223,7 +276,7 @@ export default function App() {
     );
   }
 
-  // Standalone Biometric Entrance Station Kiosk (accessible from login or direct link)
+  // Standalone Lab Entry / Exit Station Kiosk (accessible from login or direct link)
   if (isEntranceStationKiosk) {
     return (
       <div style={{ minHeight: '100vh', background: '#f8fafc', padding: '1rem' }}>
@@ -250,7 +303,7 @@ export default function App() {
             ← Back to System Login
           </button>
         </div>
-        <LabEntryExit onToast={addToast} />
+        <LabEntryExit onToast={addToast} currentUser={currentUser} />
         {/* Floating Toast Container */}
         <div className="toast-container">
           {toasts.map((toast) => (
@@ -259,6 +312,11 @@ export default function App() {
             </div>
           ))}
         </div>
+        <QrEntryChoiceModal
+          isOpen={showQrChoiceModal}
+          onClose={handleDismissQrChoice}
+          deferredPrompt={deferredInstallPrompt}
+        />
       </div>
     );
   }
@@ -266,24 +324,31 @@ export default function App() {
   // If user is not logged in, show login screen
   if (!currentUser) {
     return (
-      <Login
-        onLogin={handleLoginSuccess}
-        onOpenEntranceStation={() => setIsEntranceStationKiosk(true)}
-        centreName={settings.incubationCenterName || 'Incubation Centre'}
-      />
+      <>
+        <Login
+          onLogin={handleLoginSuccess}
+          onOpenEntranceStation={() => setIsEntranceStationKiosk(true)}
+          centreName={settings.incubationCenterName || 'Incubation Centre'}
+        />
+        <QrEntryChoiceModal
+          isOpen={showQrChoiceModal}
+          onClose={handleDismissQrChoice}
+          deferredPrompt={deferredInstallPrompt}
+        />
+      </>
     );
   }
 
-  const isStudent = currentUser?.role === 'student';
-  const isAdminOrSubstitute =
-    currentUser?.role === 'admin' ||
-    currentUser?.role === 'substitute_admin' ||
-    currentUser?.role === 'sir';
-
   return (
-    <div className="app-container">
-      {/* SIDEBAR NAVIGATION */}
-      <Sidebar
+    <GuidedTourProvider
+      currentUser={currentUser}
+      mainTab={mainTab}
+      setMainTab={setMainTab}
+      activeTab={activeTab}
+      setActiveTab={setActiveTab}
+      onToast={addToast}
+    >
+      <AuthenticatedAppLayout
         currentUser={currentUser}
         mainTab={mainTab}
         setMainTab={setMainTab}
@@ -291,56 +356,323 @@ export default function App() {
         setActiveTab={setActiveTab}
         isSidebarOpen={isSidebarOpen}
         setIsSidebarOpen={setIsSidebarOpen}
-        overdueCount={dashboardStats?.overdueItemsCount || 0}
-        insideCount={dashboardStats?.studentsInsideCount || 0}
-        lowStockCount={dashboardStats?.lowStockCount || 0}
-        centreName={settings.incubationCenterName || 'Incubation Centre'}
-        onOpenBarcodeScanner={() => setIsBarcodeScannerOpen(true)}
+        dashboardStats={dashboardStats}
+        settings={settings}
+        toasts={toasts}
+        addToast={addToast}
+        scannedStudentData={scannedStudentData}
+        setScannedStudentData={setScannedStudentData}
+        isVoiceSearchOpen={isVoiceSearchOpen}
+        setIsVoiceSearchOpen={setIsVoiceSearchOpen}
+        activeRetentionPromptStudent={activeRetentionPromptStudent}
+        handleCancelRetentionDeletion={handleCancelRetentionDeletion}
+        handleConfirmRetentionDeletion={handleConfirmRetentionDeletion}
+        showQrChoiceModal={showQrChoiceModal}
+        handleDismissQrChoice={handleDismissQrChoice}
+        deferredInstallPrompt={deferredInstallPrompt}
+        handleOpenReturnWithRoll={handleOpenReturnWithRoll}
+        handleOpenIssueWithStudent={handleOpenIssueWithStudent}
+        handleLogout={handleLogout}
       />
+    </GuidedTourProvider>
+  );
+}
 
-      {/* MAIN VIEWPORT */}
-      <div className="main-wrapper">
-        {/* TOP NAVBAR */}
-        <Navbar
-          stats={dashboardStats}
+function AuthenticatedAppLayout({
+  currentUser,
+  mainTab,
+  setMainTab,
+  activeTab,
+  setActiveTab,
+  isSidebarOpen,
+  setIsSidebarOpen,
+  dashboardStats,
+  settings,
+  toasts,
+  addToast,
+  scannedStudentData,
+  setScannedStudentData,
+  isVoiceSearchOpen,
+  setIsVoiceSearchOpen,
+  activeRetentionPromptStudent,
+  handleCancelRetentionDeletion,
+  handleConfirmRetentionDeletion,
+  showQrChoiceModal,
+  handleDismissQrChoice,
+  deferredInstallPrompt,
+  handleOpenReturnWithRoll,
+  handleOpenIssueWithStudent,
+  handleLogout,
+}) {
+  const { openHelpCenter } = useGuidedTour();
+  const isStudent = currentUser?.role === 'student';
+  const isStaff = currentUser?.role === 'staff';
+  const isAdminOrSubstitute =
+    currentUser?.role === 'admin' ||
+    currentUser?.role === 'substitute_admin' ||
+    currentUser?.role === 'sir' ||
+    (!currentUser?.role && !isStaff && !isStudent);
+
+  return (
+    <div className="app-container">
+      {/* SIDEBAR NAVIGATION - Isolated in ErrorBoundary */}
+      <ErrorBoundary title="Sidebar Navigation" fallbackStyle="minimal">
+        <Sidebar
           currentUser={currentUser}
-          onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
-          onLogout={handleLogout}
           mainTab={mainTab}
           setMainTab={setMainTab}
           activeTab={activeTab}
           setActiveTab={setActiveTab}
-          onOpenBarcodeScanner={() => setIsBarcodeScannerOpen(true)}
-          onOpenVoiceSearch={() => setIsVoiceSearchOpen(true)}
+          isSidebarOpen={isSidebarOpen}
+          setIsSidebarOpen={setIsSidebarOpen}
+          overdueCount={dashboardStats?.overdueItemsCount || 0}
+          insideCount={dashboardStats?.studentsInsideCount || 0}
+          lowStockCount={dashboardStats?.lowStockCount || 0}
+          centreName={settings.incubationCenterName || 'Incubation Centre'}
+          onOpenHelp={openHelpCenter}
         />
+      </ErrorBoundary>
+
+      {/* MAIN VIEWPORT */}
+      <div className="main-wrapper">
+        {/* TOP NAVBAR - Isolated in ErrorBoundary */}
+        <ErrorBoundary title="Top Navigation Bar" fallbackStyle="minimal">
+          <Navbar
+            stats={dashboardStats}
+            currentUser={currentUser}
+            onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+            onLogout={handleLogout}
+            mainTab={mainTab}
+            setMainTab={setMainTab}
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+            onOpenVoiceSearch={() => setIsVoiceSearchOpen(true)}
+            onOpenHelp={openHelpCenter}
+            onToast={addToast}
+          />
+        </ErrorBoundary>
 
         {/* ACTIVE PAGE CONTENT */}
         <main className="content-body">
+          <ErrorBoundary
+            onReset={() => {
+              setMainTab('management');
+              setActiveTab(isStudent ? 'student_portal' : 'dashboard');
+            }}
+          >
           {/* TAB 1: CONTROL (Environmental & Hardware Controls) */}
-          {mainTab === 'control' && (
-            <ControlTab currentUser={currentUser} onToast={addToast} />
+          {(mainTab === 'control' || activeTab === 'control') && (
+            !isStaff ? (
+              <ErrorBoundary title="Lab Controls & Environment" onReset={() => setActiveTab('control')}>
+                <ControlTab currentUser={currentUser} onToast={addToast} />
+              </ErrorBoundary>
+            ) : (
+              <div className="card" style={{ margin: '2rem 1rem' }}>
+                <div className="card-body" style={{ textAlign: 'center', padding: '3.5rem 2rem' }}>
+                  <AlertTriangle size={52} style={{ color: 'var(--danger)', margin: '0 auto 1.25rem' }} />
+                  <h3 style={{ fontSize: '1.4rem', fontWeight: 800, marginBottom: '0.75rem' }}>
+                    Hardware & Environmental Control Restricted
+                  </h3>
+                  <p className="text-muted" style={{ maxWidth: '480px', margin: '0 auto 1.5rem', lineHeight: 1.6 }}>
+                    Direct relay actuation and laboratory environmental overrides are strictly restricted to Lab Administrators and Faculty Directors.
+                  </p>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => {
+                      setMainTab('management');
+                      setActiveTab('dashboard');
+                    }}
+                  >
+                    Return to Lab Management
+                  </button>
+                </div>
+              </div>
+            )
           )}
 
           {/* TAB 2: COMPONENTS / LAB MANAGEMENT OR STUDENT PORTAL */}
-          {mainTab === 'management' && (
+          {mainTab === 'management' && activeTab !== 'control' && (
             <>
               {/* REGULAR STUDENT VIEW: Private Student Portal & Student Pages */}
               {isStudent && (
                 <>
-                  {(activeTab === 'student_portal' || !activeTab) && (
-                    <StudentPortal currentUser={currentUser} onToast={addToast} />
+                  {(activeTab === 'student_portal' || !activeTab || activeTab === 'dashboard') && (
+                    <ErrorBoundary title="Student Portal" onReset={() => setActiveTab('student_portal')}>
+                      <StudentPortal currentUser={currentUser} onToast={addToast} />
+                    </ErrorBoundary>
                   )}
                   {activeTab === 'projects' && (
-                    <Projects currentUser={currentUser} onToast={addToast} />
+                    <ErrorBoundary title="Projects & Showcase" onReset={() => setActiveTab('projects')}>
+                      <Projects currentUser={currentUser} onToast={addToast} />
+                    </ErrorBoundary>
                   )}
                   {activeTab === 'achievements_events' && (
-                    <AchievementsEvents currentUser={currentUser} onToast={addToast} />
+                    <ErrorBoundary title="Achievements & Events" onReset={() => setActiveTab('achievements_events')}>
+                      <AchievementsEvents currentUser={currentUser} onToast={addToast} />
+                    </ErrorBoundary>
                   )}
                   {activeTab === 'research_papers' && (
-                    <ResearchPapers currentUser={currentUser} onToast={addToast} />
+                    <ErrorBoundary title="Research Papers" onReset={() => setActiveTab('research_papers')}>
+                      <ResearchPapers currentUser={currentUser} onToast={addToast} />
+                    </ErrorBoundary>
                   )}
                   {activeTab === 'complaints' && (
-                    <Complaints currentUser={currentUser} onToast={addToast} />
+                    <ErrorBoundary title="Complaints & Grievances" onReset={() => setActiveTab('complaints')}>
+                      <Complaints currentUser={currentUser} onToast={addToast} />
+                    </ErrorBoundary>
+                  )}
+                  {/* Fallback for unrecognized student route - NEVER BLANK */}
+                  {!['student_portal', 'dashboard', 'projects', 'achievements_events', 'research_papers', 'complaints'].includes(activeTab) && (
+                    <ErrorBoundary title="Student Portal" onReset={() => setActiveTab('student_portal')}>
+                      <StudentPortal currentUser={currentUser} onToast={addToast} />
+                    </ErrorBoundary>
+                  )}
+                </>
+              )}
+
+              {/* RESTRICTED STAFF DESK MANAGEMENT VIEWS */}
+              {isStaff && (
+                <>
+                  {(activeTab === 'dashboard' || !activeTab) && (
+                    <ErrorBoundary title="Staff Desk Dashboard" onReset={() => setActiveTab('dashboard')}>
+                      <Dashboard
+                        setActiveTab={setActiveTab}
+                        currentUser={currentUser}
+                      />
+                    </ErrorBoundary>
+                  )}
+
+                  {activeTab === 'components' && (
+                    <ErrorBoundary title="Components Inventory" onReset={() => setActiveTab('components')}>
+                      <Components onToast={addToast} currentUser={currentUser} isReadOnly={true} />
+                    </ErrorBoundary>
+                  )}
+
+                  {activeTab === 'issue' && (
+                    <ErrorBoundary title="Issue Components" onReset={() => setActiveTab('issue')}>
+                      <IssueComponent
+                        currentUser={currentUser}
+                        scannedStudent={scannedStudentData}
+                        onClearScannedStudent={() => setScannedStudentData(null)}
+                        onToast={addToast}
+                        setActiveTab={setActiveTab}
+                      />
+                    </ErrorBoundary>
+                  )}
+
+                  {activeTab === 'return' && (
+                    <ErrorBoundary title="Return Components" onReset={() => setActiveTab('return')}>
+                      <ReturnComponent
+                        currentUser={currentUser}
+                        scannedStudent={scannedStudentData}
+                        onClearScannedStudent={() => setScannedStudentData(null)}
+                        onToast={addToast}
+                        setActiveTab={setActiveTab}
+                      />
+                    </ErrorBoundary>
+                  )}
+
+                  {activeTab === 'overdue' && (
+                    <ErrorBoundary title="Overdue Tracker" onReset={() => setActiveTab('overdue')}>
+                      <Overdue
+                        setActiveTab={setActiveTab}
+                        onToast={addToast}
+                        onOpenReturnWithRoll={handleOpenReturnWithRoll}
+                      />
+                    </ErrorBoundary>
+                  )}
+
+                  {activeTab === 'students_inside' && (
+                    <ErrorBoundary title="Students Inside Lab" onReset={() => setActiveTab('students_inside')}>
+                      <StudentsInside currentUser={currentUser} onToast={addToast} />
+                    </ErrorBoundary>
+                  )}
+
+                  {activeTab === 'face_attendance' && (
+                    <ErrorBoundary title="Face Biometric Attendance" onReset={() => setActiveTab('face_attendance')}>
+                      <FaceAttendance
+                        currentUser={currentUser}
+                        onToast={addToast}
+                        onSwitchToManual={() => setActiveTab('lab_entry_exit')}
+                      />
+                    </ErrorBoundary>
+                  )}
+
+                  {activeTab === 'lab_entry_exit' && (
+                    <ErrorBoundary title="Lab Entry / Exit Station" onReset={() => setActiveTab('lab_entry_exit')}>
+                      <LabEntryExit
+                        currentUser={currentUser}
+                        onToast={addToast}
+                        onOpenFaceAttendance={() => setActiveTab('face_attendance')}
+                      />
+                    </ErrorBoundary>
+                  )}
+
+                  {activeTab === 'transactions' && (
+                    <ErrorBoundary title="Transaction History" onReset={() => setActiveTab('transactions')}>
+                      <Transactions
+                        setActiveTab={setActiveTab}
+                        onOpenReturnWithRoll={handleOpenReturnWithRoll}
+                      />
+                    </ErrorBoundary>
+                  )}
+
+                  {activeTab === 'students' && (
+                    <ErrorBoundary title="Students Directory" onReset={() => setActiveTab('students')}>
+                      <Students
+                        currentUser={currentUser}
+                        setActiveTab={setActiveTab}
+                        onOpenIssueWithStudent={handleOpenIssueWithStudent}
+                        onOpenReturnWithRoll={handleOpenReturnWithRoll}
+                        onToast={addToast}
+                        isReadOnly={true}
+                      />
+                    </ErrorBoundary>
+                  )}
+
+                  {activeTab === 'projects' && (
+                    <ErrorBoundary title="Projects & Showcase" onReset={() => setActiveTab('projects')}>
+                      <Projects currentUser={currentUser} onToast={addToast} />
+                    </ErrorBoundary>
+                  )}
+
+                  {activeTab === 'complaints' && (
+                    <ErrorBoundary title="Complaints & Grievances" onReset={() => setActiveTab('complaints')}>
+                      <Complaints currentUser={currentUser} onToast={addToast} />
+                    </ErrorBoundary>
+                  )}
+
+                  {/* RESTRICTED ACCESS CATCH-ALL FOR STAFF */}
+                  {['authorizations', 'analytics', 'audit_log', 'settings', 'domains_holidays', 'control'].includes(activeTab) && (
+                    <div className="card" style={{ margin: '2rem 1rem' }}>
+                      <div className="card-body" style={{ textAlign: 'center', padding: '3.5rem 2rem' }}>
+                        <AlertTriangle size={52} style={{ color: 'var(--danger)', margin: '0 auto 1.25rem' }} />
+                        <h3 style={{ fontSize: '1.4rem', fontWeight: 800, marginBottom: '0.75rem' }}>
+                          Administrative Section Restricted
+                        </h3>
+                        <p className="text-muted" style={{ maxWidth: '480px', margin: '0 auto 1.5rem', lineHeight: 1.6 }}>
+                          Staff accounts do not have permission to access administrative audits, analytics export, authorizations, or system backups.
+                        </p>
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          onClick={() => setActiveTab('dashboard')}
+                        >
+                          Return to Staff Desk Dashboard
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Fallback for unrecognized staff route - NEVER BLANK */}
+                  {!['dashboard', 'components', 'issue', 'return', 'overdue', 'students_inside', 'face_attendance', 'lab_entry_exit', 'transactions', 'students', 'projects', 'complaints', 'authorizations', 'analytics', 'audit_log', 'settings', 'domains_holidays', 'control'].includes(activeTab) && (
+                    <ErrorBoundary title="Staff Desk Dashboard" onReset={() => setActiveTab('dashboard')}>
+                      <Dashboard
+                        setActiveTab={setActiveTab}
+                        currentUser={currentUser}
+                      />
+                    </ErrorBoundary>
                   )}
                 </>
               )}
@@ -349,115 +681,195 @@ export default function App() {
               {isAdminOrSubstitute && (
                 <>
                   {activeTab === 'dashboard' && (
-                    <Dashboard
-                      setActiveTab={setActiveTab}
-                      onOpenOcrModal={() => setIsCameraModalOpen(true)}
-                    />
+                    <ErrorBoundary title="Administrative Dashboard" onReset={() => setActiveTab('dashboard')}>
+                      <Dashboard
+                        setActiveTab={setActiveTab}
+                        currentUser={currentUser}
+                      />
+                    </ErrorBoundary>
                   )}
 
                   {activeTab === 'components' && (
-                    <Components onToast={addToast} currentUser={currentUser} />
+                    <ErrorBoundary title="Components Inventory" onReset={() => setActiveTab('components')}>
+                      <Components onToast={addToast} currentUser={currentUser} />
+                    </ErrorBoundary>
                   )}
 
                   {activeTab === 'issue' && (
-                    <IssueComponent
-                      onOpenOcrModal={() => setIsCameraModalOpen(true)}
-                      scannedStudent={scannedStudentData}
-                      onClearScannedStudent={() => setScannedStudentData(null)}
-                      onToast={addToast}
-                      setActiveTab={setActiveTab}
-                    />
+                    <ErrorBoundary title="Issue Components" onReset={() => setActiveTab('issue')}>
+                      <IssueComponent
+                        currentUser={currentUser}
+                        scannedStudent={scannedStudentData}
+                        onClearScannedStudent={() => setScannedStudentData(null)}
+                        onToast={addToast}
+                        setActiveTab={setActiveTab}
+                      />
+                    </ErrorBoundary>
                   )}
 
                   {activeTab === 'return' && (
-                    <ReturnComponent
-                      onOpenOcrModal={() => setIsCameraModalOpen(true)}
-                      scannedStudent={scannedStudentData}
-                      onClearScannedStudent={() => setScannedStudentData(null)}
-                      onToast={addToast}
-                      setActiveTab={setActiveTab}
-                    />
+                    <ErrorBoundary title="Return Components" onReset={() => setActiveTab('return')}>
+                      <ReturnComponent
+                        currentUser={currentUser}
+                        scannedStudent={scannedStudentData}
+                        onClearScannedStudent={() => setScannedStudentData(null)}
+                        onToast={addToast}
+                        setActiveTab={setActiveTab}
+                      />
+                    </ErrorBoundary>
                   )}
 
                   {activeTab === 'overdue' && (
-                    <Overdue
-                      setActiveTab={setActiveTab}
-                      onToast={addToast}
-                      onOpenReturnWithRoll={handleOpenReturnWithRoll}
-                    />
+                    <ErrorBoundary title="Overdue Tracker" onReset={() => setActiveTab('overdue')}>
+                      <Overdue
+                        setActiveTab={setActiveTab}
+                        onToast={addToast}
+                        onOpenReturnWithRoll={handleOpenReturnWithRoll}
+                      />
+                    </ErrorBoundary>
                   )}
 
                   {activeTab === 'students_inside' && (
-                    <StudentsInside currentUser={currentUser} onToast={addToast} />
+                    <ErrorBoundary title="Students Inside Lab" onReset={() => setActiveTab('students_inside')}>
+                      <StudentsInside currentUser={currentUser} onToast={addToast} />
+                    </ErrorBoundary>
+                  )}
+
+                  {activeTab === 'face_attendance' && (
+                    <ErrorBoundary title="Face Biometric Attendance" onReset={() => setActiveTab('face_attendance')}>
+                      <FaceAttendance
+                        currentUser={currentUser}
+                        onToast={addToast}
+                        onSwitchToManual={() => setActiveTab('lab_entry_exit')}
+                      />
+                    </ErrorBoundary>
                   )}
 
                   {activeTab === 'lab_entry_exit' && (
-                    <LabEntryExit
-                      onToast={addToast}
-                      onOpenBarcodeScanner={() => setIsBarcodeScannerOpen(true)}
-                    />
+                    <ErrorBoundary title="Lab Entry / Exit Station" onReset={() => setActiveTab('lab_entry_exit')}>
+                      <LabEntryExit
+                        currentUser={currentUser}
+                        onToast={addToast}
+                        onOpenFaceAttendance={() => setActiveTab('face_attendance')}
+                      />
+                    </ErrorBoundary>
                   )}
 
                   {activeTab === 'projects' && (
-                    <Projects currentUser={currentUser} onToast={addToast} />
+                    <ErrorBoundary title="Projects & Showcase" onReset={() => setActiveTab('projects')}>
+                      <Projects currentUser={currentUser} onToast={addToast} />
+                    </ErrorBoundary>
                   )}
 
                   {activeTab === 'achievements_events' && (
-                    <AchievementsEvents currentUser={currentUser} onToast={addToast} />
+                    <ErrorBoundary title="Achievements & Events" onReset={() => setActiveTab('achievements_events')}>
+                      <AchievementsEvents currentUser={currentUser} onToast={addToast} />
+                    </ErrorBoundary>
                   )}
 
                   {activeTab === 'research_papers' && (
-                    <ResearchPapers currentUser={currentUser} onToast={addToast} />
+                    <ErrorBoundary title="Research Papers" onReset={() => setActiveTab('research_papers')}>
+                      <ResearchPapers currentUser={currentUser} onToast={addToast} />
+                    </ErrorBoundary>
                   )}
 
                   {activeTab === 'complaints' && (
-                    <Complaints currentUser={currentUser} onToast={addToast} />
+                    <ErrorBoundary title="Complaints & Grievances" onReset={() => setActiveTab('complaints')}>
+                      <Complaints currentUser={currentUser} onToast={addToast} />
+                    </ErrorBoundary>
                   )}
 
                   {activeTab === 'domains_holidays' && (
-                    <DomainsHolidays currentUser={currentUser} onToast={addToast} />
+                    <ErrorBoundary title="Domains & Holiday Management" onReset={() => setActiveTab('domains_holidays')}>
+                      <DomainsHolidays currentUser={currentUser} onToast={addToast} />
+                    </ErrorBoundary>
                   )}
 
                   {activeTab === 'authorizations' && (
-                    <Authorizations
-                      onOpenOcrModal={() => setIsCameraModalOpen(true)}
-                      onToast={addToast}
-                    />
+                    <ErrorBoundary title="Authorizations Management" onReset={() => setActiveTab('authorizations')}>
+                      <Authorizations
+                        onToast={addToast}
+                      />
+                    </ErrorBoundary>
                   )}
 
                   {activeTab === 'transactions' && (
-                    <Transactions
-                      setActiveTab={setActiveTab}
-                      onOpenReturnWithRoll={handleOpenReturnWithRoll}
-                    />
+                    <ErrorBoundary title="Transaction History" onReset={() => setActiveTab('transactions')}>
+                      <Transactions
+                        setActiveTab={setActiveTab}
+                        onOpenReturnWithRoll={handleOpenReturnWithRoll}
+                      />
+                    </ErrorBoundary>
                   )}
 
                   {activeTab === 'students' && (
-                    <Students
-                      currentUser={currentUser}
-                      setActiveTab={setActiveTab}
-                      onOpenIssueWithStudent={handleOpenIssueWithStudent}
-                      onOpenReturnWithRoll={handleOpenReturnWithRoll}
-                      onToast={addToast}
-                      onOpenBarcodeScanner={() => setIsBarcodeScannerOpen(true)}
-                    />
+                    <ErrorBoundary title="Student Accounts Management" onReset={() => setActiveTab('students')}>
+                      <Students
+                        currentUser={currentUser}
+                        setActiveTab={setActiveTab}
+                        onOpenIssueWithStudent={handleOpenIssueWithStudent}
+                        onOpenReturnWithRoll={handleOpenReturnWithRoll}
+                        onToast={addToast}
+                      />
+                    </ErrorBoundary>
                   )}
 
                   {activeTab === 'analytics' && (
-                    <Analytics onToast={addToast} currentUser={currentUser} />
+                    <ErrorBoundary title="Analytics Dashboard" onReset={() => setActiveTab('analytics')}>
+                      <Analytics onToast={addToast} currentUser={currentUser} />
+                    </ErrorBoundary>
                   )}
 
                   {activeTab === 'audit_log' && (
-                    <AuditLog currentUser={currentUser} />
+                    <ErrorBoundary title="System Audit Logs" onReset={() => setActiveTab('audit_log')}>
+                      <AuditLog currentUser={currentUser} />
+                    </ErrorBoundary>
                   )}
 
                   {activeTab === 'settings' && (
-                    <BackupRestore onToast={addToast} />
+                    <ErrorBoundary title="Backup & Restore Settings" onReset={() => setActiveTab('settings')}>
+                      <BackupRestore onToast={addToast} />
+                    </ErrorBoundary>
+                  )}
+
+                  {activeTab === 'student_portal' && (
+                    <ErrorBoundary title="Student Portal Preview" onReset={() => setActiveTab('dashboard')}>
+                      <StudentPortal currentUser={currentUser} onToast={addToast} />
+                    </ErrorBoundary>
+                  )}
+
+                  {/* Fallback for unrecognized admin route - NEVER BLANK */}
+                  {(!activeTab || !['dashboard', 'components', 'issue', 'return', 'overdue', 'students_inside', 'face_attendance', 'lab_entry_exit', 'projects', 'achievements_events', 'research_papers', 'complaints', 'domains_holidays', 'authorizations', 'transactions', 'students', 'analytics', 'audit_log', 'settings', 'student_portal'].includes(activeTab)) && (
+                    <ErrorBoundary title="Administrative Dashboard" onReset={() => setActiveTab('dashboard')}>
+                      <Dashboard
+                        setActiveTab={setActiveTab}
+                        currentUser={currentUser}
+                      />
+                    </ErrorBoundary>
                   )}
                 </>
               )}
             </>
           )}
+
+          {/* FALLBACK FOR UNRECOGNIZED MAIN TAB - NEVER BLANK */}
+          {mainTab !== 'control' && mainTab !== 'management' && (
+            <div className="card" style={{ margin: '2rem 1rem', textAlign: 'center', padding: '3rem 2rem' }}>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: '0.75rem' }}>View Reset</h3>
+              <p className="text-muted" style={{ marginBottom: '1.5rem' }}>An unknown navigation state was detected. Click below to return to your dashboard.</p>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  setMainTab('management');
+                  setActiveTab(isStudent ? 'student_portal' : 'dashboard');
+                }}
+              >
+                Return to Dashboard
+              </button>
+            </div>
+          )}
+          </ErrorBoundary>
         </main>
       </div>
 
@@ -520,22 +932,7 @@ export default function App() {
         </div>
       )}
 
-      {/* GLOBAL CAMERA OCR MODAL */}
-      <CameraModal
-        isOpen={isCameraModalOpen}
-        onClose={() => setIsCameraModalOpen(false)}
-        onConfirm={handleOcrConfirm}
-        title="Student ID Card Scanner (OCR)"
-      />
 
-      {/* STUDENT ID CARD BARCODE & QR SCANNER MODAL */}
-      <BarcodeScannerModal
-        isOpen={isBarcodeScannerOpen}
-        onClose={() => setIsBarcodeScannerOpen(false)}
-        onStudentSelected={(student) => {
-          addToast(`Scanned ID Card: ${student.name} (${student.rollNumber})`);
-        }}
-      />
 
       {/* GLOBAL VOICE & MULTI-FILTER SEARCH MODAL */}
       <VoiceSearchModal
@@ -565,6 +962,13 @@ export default function App() {
         }}
       />
 
+      {/* QR CODE ENTRY CHOICE MODAL ("Install as App" vs "Continue on Web") */}
+      <QrEntryChoiceModal
+        isOpen={showQrChoiceModal}
+        onClose={handleDismissQrChoice}
+        deferredPrompt={deferredInstallPrompt}
+      />
+
       {/* FLOATING TOAST NOTIFICATIONS */}
       <div className="toast-container">
         {toasts.map((toast) => (
@@ -573,6 +977,9 @@ export default function App() {
           </div>
         ))}
       </div>
+
+      {/* GUIDED TOUR SPOTLIGHT, HAND POINTER, TOOLTIP & HELP CENTER */}
+      <GuidedTourHost currentUser={currentUser} />
     </div>
   );
 }

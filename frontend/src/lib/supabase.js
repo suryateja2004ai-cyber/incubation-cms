@@ -19,7 +19,20 @@ if (!supabaseUrl || !supabasePublishableKey) {
   );
 }
 
-export const supabase = createClient(
-  supabaseUrl || 'https://placeholder.supabase.co',
-  supabasePublishableKey || 'placeholder-anon-key'
-);
+const resolvedSupabaseUrl = supabaseUrl || 'https://placeholder.supabase.co';
+const resolvedSupabaseKey = supabasePublishableKey || 'placeholder-anon-key';
+
+export function getSupabaseConfig() {
+  const isConfigured =
+    Boolean(supabaseUrl && supabasePublishableKey) &&
+    !resolvedSupabaseUrl.includes('placeholder.supabase.co') &&
+    resolvedSupabaseKey !== 'placeholder-anon-key';
+
+  return {
+    supabaseUrl: resolvedSupabaseUrl,
+    supabasePublishableKey: resolvedSupabaseKey,
+    isConfigured,
+  };
+}
+
+export const supabase = createClient(resolvedSupabaseUrl, resolvedSupabaseKey);

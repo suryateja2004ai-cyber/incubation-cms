@@ -15,7 +15,7 @@ import {
   Clock,
   User,
   Tag,
-  Fingerprint,
+  UserCheck,
   Sliders,
   Users,
   HardDrive,
@@ -36,8 +36,10 @@ import {
   getStudentsRetentionAudit,
   subscribeToDb,
 } from '../../db/database';
+import { formatDisplayDate } from '../../utils/dateFormatter';
 
-export default function Dashboard({ setActiveTab, onOpenOcrModal }) {
+export default function Dashboard({ setActiveTab, onOpenOcrModal, currentUser }) {
+  const isStaff = currentUser?.role === 'staff';
   const [stats, setStats] = useState(null);
   const [storageStatus, setStorageStatus] = useState(getDatabaseStorageStatus());
   const [unverifiedCount, setUnverifiedCount] = useState(0);
@@ -73,39 +75,32 @@ export default function Dashboard({ setActiveTab, onOpenOcrModal }) {
       <div className="flex-between" style={{ marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
           <h2 style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--neutral-900)' }}>
-            Admin Dashboard
+            {isStaff ? 'Staff Desk Dashboard' : 'Admin Dashboard'}
           </h2>
           <p className="text-muted" style={{ fontSize: '0.9rem' }}>
             Live component inventory & student issue/return management
           </p>
         </div>
         <div style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap' }}>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => setActiveTab('control')}
-            title="Tab 1: Control (Devices & Environment)"
-          >
-            <Sliders size={18} />
-            Lab Controls
-          </button>
+          {!isStaff && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setActiveTab('control')}
+              title="Tab 1: Control (Devices & Environment)"
+            >
+              <Sliders size={18} />
+              Lab Controls
+            </button>
+          )}
           <button
             type="button"
             className="btn btn-secondary"
             onClick={() => setActiveTab('lab_entry_exit')}
-            title="Biometric Entrance / Exit Station"
+            title="Lab Entry / Exit Station"
           >
-            <Fingerprint size={18} />
-            Entrance Station
-          </button>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={onOpenOcrModal}
-            title="Scan Student ID Card"
-          >
-            <Camera size={18} />
-            Scan ID
+            <UserCheck size={18} />
+            Lab Entry / Exit
           </button>
           <button
             type="button"
@@ -546,11 +541,11 @@ export default function Dashboard({ setActiveTab, onOpenOcrModal }) {
                         </div>
                       </td>
                       <td className="text-sm">
-                        {new Date(txn.issueDate).toLocaleDateString()}
+                        {formatDisplayDate(txn.issueDate)}
                       </td>
                       <td className="text-sm">
                         <span style={{ color: isOverdue ? 'var(--danger-text)' : 'inherit', fontWeight: isOverdue ? 700 : 400 }}>
-                          {new Date(txn.overallDueDate).toLocaleDateString()}
+                          {formatDisplayDate(txn.overallDueDate)}
                         </span>
                       </td>
                       <td>

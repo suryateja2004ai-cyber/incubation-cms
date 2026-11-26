@@ -61,13 +61,23 @@ const {
   getAnnouncements,
   getActiveAnnouncements,
   createAnnouncement,
+  archiveAnnouncement,
+  deleteAnnouncement,
   getResearchPapers,
   createResearchPaper,
+  updateResearchPaper,
+  deleteResearchPaper,
   toggleStaffPresence,
   getStaffActivePresence,
   searchStudents,
   executeSmartVoiceSearch,
   getStudentPersonalStats,
+  addProjectExpenditure,
+  addProjectContribution,
+  toggleDomainStatus,
+  deleteComplaint,
+  getComponentUsageStats,
+  getIncubationReportingMetrics,
   SIR_USER,
 } = await import('../../frontend/src/db/database.js');
 
@@ -340,9 +350,67 @@ async function runTests() {
   assert(personalStats.workingDayStreak !== undefined, 'workingDayStreak included in personal stats');
   assert(Array.isArray(personalStats.projects), 'Projects included in personal stats');
   assert(Array.isArray(personalStats.achievements), 'Achievements included in personal stats');
+  assert(Array.isArray(personalStats.announcements), 'Announcements included in personal stats');
+  assert(Array.isArray(personalStats.events), 'Events included in personal stats');
 
   // --------------------------------------------------------------------------
-  console.log('\n--- Part 9: Protected Files Size Invariant Verification ---');
+  console.log('\n--- Part 9: Advanced Low-Storage Extensions & Reporting ---');
+  // --------------------------------------------------------------------------
+  // Project expenditures and remaining budget
+  const expProj = await addProjectExpenditure(
+    newProject.id,
+    { description: 'Sensors and prototype PCB', amount: 3500, fundingSource: 'Incubation Seed' },
+    sirUser
+  );
+  assert(expProj && expProj.expenditures && expProj.expenditures.length > 0, 'Project expenditure successfully logged');
+  assert(expProj.expenditures[0].amount === 3500, 'Expenditure amount recorded accurately');
+  assert(expProj.remainingBudget !== undefined, 'Remaining budget calculated');
+
+  // Project team contributions
+  const contribProj = await addProjectContribution(
+    newProject.id,
+    { memberRoll: studentUser.rollNumber, memberName: studentUser.name, task: 'Firmware design', contributionDetails: 'Wrote BLE comms' },
+    sirUser
+  );
+  assert(contribProj && contribProj.contributions && contribProj.contributions.length > 0, 'Project contribution successfully tracked');
+
+  // Domain active / inactive toggle
+  const domainToggleRes = await toggleDomainStatus('IoT & Embedded Systems', sirUser);
+  assert(domainToggleRes && domainToggleRes.name === 'IoT & Embedded Systems', 'Domain status toggle operates correctly');
+
+  // Announcement archive
+  const archivedAnn = await archiveAnnouncement(announcement.id, sirUser);
+  assert(archivedAnn && archivedAnn.archived === true, 'Announcement archived successfully');
+
+  // Research paper update & delete
+  const updatedPaper = await updateResearchPaper(
+    paper.id,
+    { status: 'published', isScopusIndexed: true, isIeeeIndexed: true },
+    studentUser
+  );
+  assert(updatedPaper && updatedPaper.isScopusIndexed === true, 'Paper updated with Scopus indexing');
+
+  const delPaperRes = await deleteResearchPaper(paper.id, studentUser);
+  assert(delPaperRes && delPaperRes.id === paper.id, 'Paper deleted by authorized student owner');
+
+  // Complaint deletion by Sir
+  const delComplaintRes = await deleteComplaint(complaint2.id, sirUser);
+  assert(delComplaintRes && delComplaintRes.id === complaint2.id, 'Complaint record deleted by authorized Sir/Admin');
+
+  // Component usage statistics
+  const allComps = getComponents();
+  const testCompId = allComps[0]?.id || 'COMP-001';
+  const compUsage = getComponentUsageStats(testCompId);
+  assert(compUsage && compUsage.componentName && typeof compUsage.totalTimesBorrowed === 'number', 'Component usage statistics returned correctly');
+
+  // Executive incubation reporting metrics
+  const execMetrics = getIncubationReportingMetrics();
+  assert(execMetrics && execMetrics.projects && execMetrics.projects.byBranch, 'Executive metrics contain project branch breakdowns');
+  assert(execMetrics.inventory && typeof execMetrics.inventory.availabilityRate === 'number', 'Executive metrics compute inventory availability rate');
+  assert(execMetrics.research && typeof execMetrics.research.published === 'number', 'Executive metrics aggregate research publications');
+
+  // --------------------------------------------------------------------------
+  console.log('\n--- Part 10: Protected Files Size Invariant Verification ---');
   // --------------------------------------------------------------------------
   const backupFilePath = path.join(__dirname, '../../frontend/src/db/data_base_backup.js');
   const sampleFilePath = path.join(__dirname, '../../frontend/src/db/sampleData.js');

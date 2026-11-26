@@ -1,4 +1,4 @@
-﻿-- ==============================================================================
+-- ==============================================================================
 -- 002_incubation_start_and_storage.sql
 -- Safe Non-Destructive Migration: Student Incubation Journey Start Date & Storage Metrics
 --
@@ -31,8 +31,8 @@ DECLARE
   visits_cnt bigint;
   audit_cnt bigint;
 BEGIN
-  -- Verify caller role is Admin or Substitute Admin
-  IF public.get_current_user_role() NOT IN ('admin', 'substitute_admin') THEN
+  -- Verify caller role is Admin, Substitute Admin, or Sir
+  IF public.get_current_user_role() NOT IN ('admin', 'substitute_admin', 'sir') THEN
     RAISE EXCEPTION 'Access denied: Admin privileges required to inspect storage metrics.';
   END IF;
 
@@ -61,4 +61,4 @@ BEGIN
     'timestamp', now()
   );
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
+$$ LANGUAGE plpgsql SECURITY DEFINER STABLE SET search_path = public, auth;

@@ -24,6 +24,7 @@ import {
   Lock,
   Wifi,
   WifiOff,
+  Database,
 } from 'lucide-react';
 import {
   getDevices,
@@ -32,7 +33,14 @@ import {
   updateDeviceConfirmedState,
   subscribeToDb,
 } from '../../db/database';
-import { esp32Service, HARDWARE_MODES, DEVICE_HARDWARE_STATES } from '../../services/esp32/esp32Service';
+import esp32Service, {
+  esp32Service as esp32ServiceNamed,
+  HARDWARE_MODES,
+  DEVICE_HARDWARE_STATES,
+} from '../../services/esp32/esp32Service';
+import ZoneGestureMonitor from '../../components/zones/ZoneGestureMonitor';
+
+const activeEsp32Service = esp32Service || esp32ServiceNamed || {};
 
 export default function ControlTab({ currentUser, onToast }) {
   const [devices, setDevices] = useState([]);
@@ -41,21 +49,60 @@ export default function ControlTab({ currentUser, onToast }) {
   const [voiceFeedback, setVoiceFeedback] = useState('');
   const [isEmergencyFallback, setIsEmergencyFallback] = useState(false);
   const [isSyncingWithEsp32, setIsSyncingWithEsp32] = useState(false);
-  const [hwMode, setHwMode] = useState(esp32Service.getMode());
+  const [hwMode, setHwMode] = useState(
+    typeof activeEsp32Service.getMode === 'function'
+      ? activeEsp32Service.getMode()
+      : (HARDWARE_MODES?.SIMULATION || 'SIMULATION')
+  );
   const [, setHardwareTick] = useState(0);
 
   const recognitionRef = useRef(null);
   const isStudent = currentUser?.role === 'student';
-  const isAdminOrSubstitute = currentUser?.role === 'admin' || currentUser?.role === 'substitute_admin';
+  const isAdminOrSubstitute =
+    currentUser?.role === 'admin' ||
+    currentUser?.role === 'substitute_admin' ||
+    currentUser?.role === 'sir';
+
+  const [isGatewayConnected, setIsGatewayConnected] = useState(Boolean(activeEsp32Service.isGatewayOnline));
+  const [isCheckingGateway, setIsCheckingGateway] = useState(false);
 
   useEffect(() => {
     loadData();
+
+    // Safely check gateway health without crashing if method or network is unavailable
+    if (typeof activeEsp32Service.checkGatewayHealth === 'function') {
+      setIsCheckingGateway(true);
+      activeEsp32Service
+        .checkGatewayHealth()
+        .then((res) => {
+          setIsGatewayConnected(Boolean(res?.isGatewayOnline));
+        })
+        .catch((err) => {
+          console.warn('[ControlTab] ESP32 Gateway health check unreachable:', err);
+          setIsGatewayConnected(false);
+        })
+        .finally(() => {
+          setIsCheckingGateway(false);
+        });
+    } else {
+      setIsGatewayConnected(Boolean(activeEsp32Service.isGatewayOnline));
+      setIsCheckingGateway(false);
+    }
+
     const unsubscribeDb = subscribeToDb(() => loadData());
-    const unsubscribeEsp = esp32Service.subscribeStatus((status) => {
-      if (status.mode) setHwMode(status.mode);
-      if (status.fallback !== undefined) setIsEmergencyFallback(status.fallback);
-      setHardwareTick((t) => t + 1);
-    });
+    const unsubscribeEsp = typeof activeEsp32Service.subscribeStatus === 'function'
+      ? activeEsp32Service.subscribeStatus((status) => {
+          if (status?.mode) setHwMode(status.mode);
+          if (status?.fallback !== undefined) setIsEmergencyFallback(status.fallback);
+          if (status?.isGatewayOnline !== undefined) {
+            setIsGatewayConnected(Boolean(status.isGatewayOnline));
+          } else {
+            setIsGatewayConnected(Boolean(activeEsp32Service.isGatewayOnline));
+          }
+          setHardwareTick((t) => t + 1);
+        })
+      : () => {};
+
     return () => {
       unsubscribeDb();
       unsubscribeEsp();
@@ -70,24 +117,64 @@ export default function ControlTab({ currentUser, onToast }) {
       try {
         const pStats = getPowerMonitoringStats(currentUser?.role);
         setPowerStats(pStats);
+        if (pStats && Array.isArray(pStats.devices)) {
+          syncPowerToPostgres(pStats.devices);
+        }
       } catch (e) {
         console.warn('Power stats read error:', e);
       }
     }
   }
 
+  async function syncPowerToPostgres(deviceList, showToastNotice = false) {
+    const list = deviceList || powerStats?.devices;
+    if (!list || list.length === 0) return;
+    try {
+      const res = await fetch('/api/power-consumption', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ devices: list }),
+      });
+      if (res.ok && showToastNotice && onToast) {
+        onToast('Zone & device power consumption stored in PostgreSQL (public.power_consumption)');
+      }
+    } catch (err) {
+      console.warn('[PostgreSQL Sync] Power consumption sync warning:', err);
+    }
+  }
+
   // Hardware Mode Switcher (Real ESP32 vs Simulation/Test)
   function toggleHardwareMode() {
     const next = hwMode === HARDWARE_MODES.REAL_HARDWARE ? HARDWARE_MODES.SIMULATION : HARDWARE_MODES.REAL_HARDWARE;
-    esp32Service.setMode(next);
+    if (typeof activeEsp32Service.setMode === 'function') {
+      activeEsp32Service.setMode(next);
+    }
     setHwMode(next);
+
+    if (next === HARDWARE_MODES.REAL_HARDWARE && typeof activeEsp32Service.checkGatewayHealth === 'function') {
+      setIsCheckingGateway(true);
+      activeEsp32Service
+        .checkGatewayHealth()
+        .then((res) => {
+          setIsGatewayConnected(Boolean(res?.isGatewayOnline));
+        })
+        .catch(() => {
+          setIsGatewayConnected(false);
+        })
+        .finally(() => {
+          setIsCheckingGateway(false);
+        });
+    }
+
     if (onToast) {
       onToast(next === HARDWARE_MODES.REAL_HARDWARE ? 'Mode: REAL HARDWARE (Commands dispatched to physical ESP32)' : 'Mode: SIMULATION / TEST (Safe offline simulation)');
     }
   }
 
   function renderHardwareStatus(device) {
-    const hw = esp32Service.getDeviceState(device.id);
+    const hw = typeof activeEsp32Service.getDeviceState === 'function'
+      ? activeEsp32Service.getDeviceState(device.id)
+      : null;
     const state = hw?.state || (device.commandedState !== device.actualState ? DEVICE_HARDWARE_STATES.WAITING_CONFIRMATION : DEVICE_HARDWARE_STATES.CONFIRMED);
 
     switch (state) {
@@ -131,10 +218,14 @@ export default function ControlTab({ currentUser, onToast }) {
     const nextState = dev.commandedState === 'ON' ? 'OFF' : 'ON';
     setIsSyncingWithEsp32(true);
     try {
-      await esp32Service.sendCommand(dev.id, nextState, dev.brightness, dev.speed, currentUser);
+      if (typeof activeEsp32Service.sendCommand === 'function') {
+        await activeEsp32Service.sendCommand(dev.id, nextState, dev.brightness, dev.speed, currentUser);
+      } else {
+        updateDeviceConfirmedState(dev.id, nextState, dev.brightness, dev.speed);
+      }
       if (onToast) onToast(`${dev.name} commanded ${nextState}`);
     } catch (err) {
-      alert(err.message);
+      alert(err.message || 'Device control command failed');
     } finally {
       setIsSyncingWithEsp32(false);
     }
@@ -144,9 +235,13 @@ export default function ControlTab({ currentUser, onToast }) {
     const val = Number(newBrightness);
     setDeviceCommandState(dev.id, dev.commandedState, val, dev.speed, currentUser);
     try {
-      await esp32Service.sendCommand(dev.id, dev.commandedState, val, dev.speed, currentUser);
+      if (typeof activeEsp32Service.sendCommand === 'function') {
+        await activeEsp32Service.sendCommand(dev.id, dev.commandedState, val, dev.speed, currentUser);
+      } else {
+        updateDeviceConfirmedState(dev.id, dev.commandedState, val, dev.speed);
+      }
     } catch (err) {
-      console.warn(err);
+      console.warn('[ControlTab] Brightness update failed:', err);
     }
   }
 
@@ -154,9 +249,13 @@ export default function ControlTab({ currentUser, onToast }) {
     const val = Number(newSpeed);
     setDeviceCommandState(dev.id, dev.commandedState, dev.brightness, val, currentUser);
     try {
-      await esp32Service.sendCommand(dev.id, dev.commandedState, dev.brightness, val, currentUser);
+      if (typeof activeEsp32Service.sendCommand === 'function') {
+        await activeEsp32Service.sendCommand(dev.id, dev.commandedState, dev.brightness, val, currentUser);
+      } else {
+        updateDeviceConfirmedState(dev.id, dev.commandedState, dev.brightness, val);
+      }
     } catch (err) {
-      console.warn(err);
+      console.warn('[ControlTab] Speed update failed:', err);
     }
   }
 
@@ -164,7 +263,11 @@ export default function ControlTab({ currentUser, onToast }) {
   // Demonstrates two-way synchronization when someone toggles a physical wall switch in the lab
   function handleSimulatePhysicalSwitch(dev, type = 'wall switch') {
     const physicalState = dev.actualState === 'ON' ? 'OFF' : 'ON';
-    esp32Service.handlePhysicalSwitchEvent(dev.id, physicalState, dev.brightness, dev.speed, true);
+    if (typeof activeEsp32Service.handlePhysicalSwitchEvent === 'function') {
+      activeEsp32Service.handlePhysicalSwitchEvent(dev.id, physicalState, dev.brightness, dev.speed, true);
+    } else {
+      updateDeviceConfirmedState(dev.id, physicalState, dev.brightness, dev.speed);
+    }
     if (onToast) onToast(`[Hardware Simulator] ${dev.name} simulated ${type} toggled to ${physicalState}`);
   }
 
@@ -172,7 +275,9 @@ export default function ControlTab({ currentUser, onToast }) {
   function toggleEmergencyFallback() {
     const next = !isEmergencyFallback;
     setIsEmergencyFallback(next);
-    esp32Service.setEmergencyFallback(next);
+    if (typeof activeEsp32Service.setEmergencyFallback === 'function') {
+      activeEsp32Service.setEmergencyFallback(next);
+    }
     if (onToast) {
       onToast(next ? 'Emergency Manual Fallback Activated (Bypasses ESP32 timeouts)' : 'Emergency Fallback Deactivated (Normal two-way sync active)');
     }
@@ -229,7 +334,13 @@ export default function ControlTab({ currentUser, onToast }) {
 
     if (text.includes('all lights')) {
       devices.filter((d) => d.type === 'light').forEach((d) => {
-        esp32Service.sendCommand(d.id, isTurnOn ? 'ON' : 'OFF', d.brightness, d.speed, currentUser);
+        if (typeof activeEsp32Service.sendCommand === 'function') {
+          activeEsp32Service
+            .sendCommand(d.id, isTurnOn ? 'ON' : 'OFF', d.brightness, d.speed, currentUser)
+            .catch((err) => console.warn('[VoiceControl] sendCommand error:', err));
+        } else {
+          updateDeviceConfirmedState(d.id, isTurnOn ? 'ON' : 'OFF', d.brightness, d.speed);
+        }
       });
       if (onToast) onToast(`All lights turned ${isTurnOn ? 'ON' : 'OFF'} via voice command.`);
       return;
@@ -237,7 +348,13 @@ export default function ControlTab({ currentUser, onToast }) {
 
     if (text.includes('all fans')) {
       devices.filter((d) => d.type === 'fan').forEach((d) => {
-        esp32Service.sendCommand(d.id, isTurnOn ? 'ON' : 'OFF', d.brightness, d.speed, currentUser);
+        if (typeof activeEsp32Service.sendCommand === 'function') {
+          activeEsp32Service
+            .sendCommand(d.id, isTurnOn ? 'ON' : 'OFF', d.brightness, d.speed, currentUser)
+            .catch((err) => console.warn('[VoiceControl] sendCommand error:', err));
+        } else {
+          updateDeviceConfirmedState(d.id, isTurnOn ? 'ON' : 'OFF', d.brightness, d.speed);
+        }
       });
       if (onToast) onToast(`All fans turned ${isTurnOn ? 'ON' : 'OFF'} via voice command.`);
       return;
@@ -248,7 +365,13 @@ export default function ControlTab({ currentUser, onToast }) {
       const nameWords = dev.name.toLowerCase().split(' ');
       if (nameWords.some((w) => text.includes(w) && w.length > 2)) {
         if (isTurnOn || isTurnOff) {
-          esp32Service.sendCommand(dev.id, isTurnOn ? 'ON' : 'OFF', dev.brightness, dev.speed, currentUser);
+          if (typeof activeEsp32Service.sendCommand === 'function') {
+            activeEsp32Service
+              .sendCommand(dev.id, isTurnOn ? 'ON' : 'OFF', dev.brightness, dev.speed, currentUser)
+              .catch((err) => console.warn('[VoiceControl] sendCommand error:', err));
+          } else {
+            updateDeviceConfirmedState(dev.id, isTurnOn ? 'ON' : 'OFF', dev.brightness, dev.speed);
+          }
           if (onToast) onToast(`${dev.name} set to ${isTurnOn ? 'ON' : 'OFF'} via voice command.`);
           return;
         }
@@ -266,6 +389,77 @@ export default function ControlTab({ currentUser, onToast }) {
 
   return (
     <div className="control-tab-container">
+      {/* Local Lab Network Security Warning Banner */}
+      {!isGatewayConnected && hwMode === HARDWARE_MODES.REAL_HARDWARE && (
+        <div
+          style={{
+            background: '#fef2f2',
+            color: '#991b1b',
+            border: '1px solid #fecaca',
+            borderRadius: 'var(--radius-lg)',
+            padding: '0.85rem 1.25rem',
+            marginBottom: '1.25rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '0.75rem',
+            fontSize: '0.88rem',
+            fontWeight: 600,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <AlertTriangle size={20} style={{ flexShrink: 0, color: '#dc2626' }} />
+            <span>
+              Physical Lab Network Protection: Local Device Gateway is offline or unreachable from this network.
+              Physical hardware controls require local lab network connectivity or Switching to Simulation/Test Mode.
+            </span>
+          </div>
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={() => {
+              if (typeof activeEsp32Service.checkGatewayHealth === 'function') {
+                setIsCheckingGateway(true);
+                activeEsp32Service
+                  .checkGatewayHealth()
+                  .then((res) => {
+                    setIsGatewayConnected(Boolean(res?.isGatewayOnline));
+                    if (onToast) {
+                      onToast(res?.isGatewayOnline ? 'ESP32 Gateway is Online' : 'ESP32 Gateway is Offline');
+                    }
+                  })
+                  .catch(() => {
+                    setIsGatewayConnected(false);
+                    if (onToast) onToast('ESP32 Gateway is Offline');
+                  })
+                  .finally(() => {
+                    setIsCheckingGateway(false);
+                  });
+              }
+            }}
+            disabled={isCheckingGateway}
+            style={{
+              background: '#ffffff',
+              border: '1px solid #fca5a5',
+              color: '#991b1b',
+              fontWeight: 600,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              cursor: isCheckingGateway ? 'not-allowed' : 'pointer',
+              borderRadius: 'var(--radius-sm)',
+              padding: '0.35rem 0.75rem',
+              fontSize: '0.82rem',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            <RefreshCw size={13} className={isCheckingGateway ? 'spin' : ''} />
+            <span>{isCheckingGateway ? 'Checking Gateway...' : 'Retry Connection'}</span>
+          </button>
+        </div>
+      )}
+
       {/* Top Header & Two-Way Sync Bar */}
       <div className="flex-between" style={{ marginBottom: '1.25rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
@@ -284,13 +478,47 @@ export default function ControlTab({ currentUser, onToast }) {
           <div
             className="navbar-stat-pill"
             style={{
-              background: isEmergencyFallback ? 'var(--warning-light)' : 'var(--success-light)',
-              color: isEmergencyFallback ? 'var(--warning-text)' : 'var(--success-text)',
-              border: `1px solid ${isEmergencyFallback ? 'var(--warning-border)' : 'var(--success-border)'}`,
+              background: isEmergencyFallback
+                ? 'var(--warning-light, #fef3c7)'
+                : hwMode === HARDWARE_MODES.REAL_HARDWARE
+                  ? isGatewayConnected
+                    ? 'var(--success-light, #dcfce7)'
+                    : '#fee2e2'
+                  : '#e0f2fe',
+              color: isEmergencyFallback
+                ? 'var(--warning-text, #b45309)'
+                : hwMode === HARDWARE_MODES.REAL_HARDWARE
+                  ? isGatewayConnected
+                    ? 'var(--success-text, #15803d)'
+                    : '#991b1b'
+                  : '#0369a1',
+              border: `1px solid ${
+                isEmergencyFallback
+                  ? 'var(--warning-border, #fcd34d)'
+                  : hwMode === HARDWARE_MODES.REAL_HARDWARE
+                    ? isGatewayConnected
+                      ? 'var(--success-border, #86efac)'
+                      : '#fca5a5'
+                    : '#7dd3fc'
+              }`,
             }}
           >
-            {isEmergencyFallback ? <WifiOff size={15} /> : <Wifi size={15} />}
-            <span>{isEmergencyFallback ? 'Emergency Manual Fallback' : 'ESP32 Two-Way Sync Active'}</span>
+            {isEmergencyFallback ? (
+              <WifiOff size={15} />
+            ) : hwMode === HARDWARE_MODES.REAL_HARDWARE ? (
+              isGatewayConnected ? <Wifi size={15} /> : <WifiOff size={15} />
+            ) : (
+              <Sliders size={15} />
+            )}
+            <span>
+              {isEmergencyFallback
+                ? 'Emergency Manual Fallback'
+                : hwMode === HARDWARE_MODES.REAL_HARDWARE
+                  ? isGatewayConnected
+                    ? 'ESP32 Gateway Online'
+                    : 'ESP32 Gateway Offline'
+                  : 'Simulation / Test Mode Active'}
+            </span>
           </div>
 
           {/* Mode Switcher Button */}
@@ -350,7 +578,7 @@ export default function ControlTab({ currentUser, onToast }) {
       )}
 
       {/* TWO-WAY HARDWARE SYNCHRONIZATION BANNER */}
-      <div className="card" style={{ background: '#f8fafc', border: '1px solid var(--neutral-200)', marginBottom: '1.5rem' }}>
+      <div className="card" data-tour="control-env-card" style={{ background: '#f8fafc', border: '1px solid var(--neutral-200)', marginBottom: '1.5rem' }}>
         <div className="card-body" style={{ padding: '0.85rem 1.25rem' }}>
           <div className="flex-between" style={{ flexWrap: 'wrap', gap: '0.75rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
@@ -366,8 +594,11 @@ export default function ControlTab({ currentUser, onToast }) {
         </div>
       </div>
 
+      {/* 3x3 ZONE-BASED OCCUPANCY & HAND GESTURE CONTROL MONITOR */}
+      <ZoneGestureMonitor />
+
       {/* 1. ALL LIGHTS SECTION (Accessible to Students, Substitute Admin & Admin) */}
-      <div className="card">
+      <div className="card" data-tour="control-relays-card">
         <div className="card-header">
           <h3 className="card-title">
             <Lightbulb size={20} style={{ color: '#eab308' }} /> All Lab Lights (ON/OFF + Brightness)
@@ -697,9 +928,24 @@ export default function ControlTab({ currentUser, onToast }) {
             </div>
 
             {/* Per-Device Consumption Table */}
-            <h4 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '0.75rem', color: '#4c1d95' }}>
-              Device-by-Device Energy Breakdown:
-            </h4>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <h4 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0, color: '#4c1d95' }}>
+                Zone & Physical Hardware Energy Breakdown:
+              </h4>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span className="badge badge-success" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem' }}>
+                  <Database size={13} /> Stored in PostgreSQL (public.power_consumption)
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  style={{ fontSize: '0.75rem', padding: '0.25rem 0.6rem' }}
+                  onClick={() => syncPowerToPostgres(powerStats.devices, true)}
+                >
+                  <RefreshCw size={12} /> Sync to Database
+                </button>
+              </div>
+            </div>
             <div className="table-responsive">
               <table className="table" style={{ background: '#fff', borderRadius: 'var(--radius-md)' }}>
                 <thead>

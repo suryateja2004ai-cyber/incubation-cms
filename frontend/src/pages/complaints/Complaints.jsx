@@ -17,13 +17,18 @@ import {
   Filter,
   CheckCircle,
   XCircle,
+  Trash2,
+  MapPin,
+  User,
 } from 'lucide-react';
 import {
   getComplaints,
   createComplaint,
   updateComplaintStatus,
+  deleteComplaint,
   subscribeToDb,
 } from '../../db/database';
+import { formatDisplayDate } from '../../utils/dateFormatter';
 
 export default function Complaints({ currentUser, onToast }) {
   const [complaints, setComplaints] = useState([]);
@@ -33,12 +38,15 @@ export default function Complaints({ currentUser, onToast }) {
   // Submit form state
   const [complaintType, setComplaintType] = useState('equipment_environment');
   const [itemName, setItemName] = useState('');
+  const [locationDetails, setLocationDetails] = useState('');
+  const [componentId, setComponentId] = useState('');
   const [description, setDescription] = useState('');
 
   // Admin resolution modal state
   const [selectedComplaint, setSelectedComplaint] = useState(null);
   const [newStatus, setNewStatus] = useState('in_progress');
   const [adminNotes, setAdminNotes] = useState('');
+  const [assignedTo, setAssignedTo] = useState('');
 
   const isSirOrAdmin =
     currentUser?.role === 'admin' ||
@@ -61,6 +69,8 @@ export default function Complaints({ currentUser, onToast }) {
       await createComplaint({
         type: complaintType,
         itemName,
+        locationDetails,
+        componentId,
         description,
         reportedByRoll: currentUser?.rollNumber || currentUser?.id || 'STUDENT',
         reportedByName: currentUser?.name || 'Student',
@@ -68,6 +78,8 @@ export default function Complaints({ currentUser, onToast }) {
       onToast('Issue report submitted successfully to lab administrators.');
       setIsSubmitModalOpen(false);
       setItemName('');
+      setLocationDetails('');
+      setComponentId('');
       setDescription('');
       loadComplaints();
     } catch (err) {
@@ -81,7 +93,7 @@ export default function Complaints({ currentUser, onToast }) {
     try {
       await updateComplaintStatus(
         selectedComplaint.id,
-        { status: newStatus, adminNotes },
+        { status: newStatus, adminNotes, assignedTo },
         currentUser
       );
       onToast(`Complaint ${selectedComplaint.id} updated to "${newStatus}".`);
@@ -89,6 +101,17 @@ export default function Complaints({ currentUser, onToast }) {
       loadComplaints();
     } catch (err) {
       onToast(`Update error: ${err.message}`);
+    }
+  }
+
+  async function handleDeleteComplaint(id) {
+    if (!confirm('Are you sure you want to permanently delete this complaint record?')) return;
+    try {
+      await deleteComplaint(id, currentUser);
+      onToast('Complaint record deleted.');
+      loadComplaints();
+    } catch (err) {
+      onToast(`Delete error: ${err.message}`);
     }
   }
 
@@ -248,17 +271,29 @@ export default function Complaints({ currentUser, onToast }) {
                   </span>
 
                   {isSirOrAdmin && (
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => {
-                        setSelectedComplaint(c);
-                        setNewStatus(c.status);
-                        setAdminNotes(c.adminNotes || '');
-                      }}
-                    >
-                      Manage / Resolve
-                    </button>
+                    <div style={{ display: 'flex', gap: '0.4rem' }}>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => {
+                          setSelectedComplaint(c);
+                          setNewStatus(c.status);
+                          setAdminNotes(c.adminNotes || '');
+                          setAssignedTo(c.assignedTo || '');
+                        }}
+                      >
+                        Manage / Resolve
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-danger btn-sm"
+                        style={{ padding: '0.2rem 0.5rem' }}
+                        onClick={() => handleDeleteComplaint(c.id)}
+                        title="Delete Complaint Record"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
@@ -266,6 +301,23 @@ export default function Complaints({ currentUser, onToast }) {
               <p style={{ fontSize: '0.9rem', color: 'var(--neutral-700)', lineHeight: '1.45', margin: '0.5rem 0' }}>
                 {c.description}
               </p>
+
+              {(c.locationDetails || c.assignedTo) && (
+                <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', margin: '0.4rem 0', fontSize: '0.8rem', color: 'var(--neutral-600)' }}>
+                  {c.locationDetails && (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      <MapPin size={13} className="text-primary" />
+                      <strong>Location:</strong> {c.locationDetails}
+                    </span>
+                  )}
+                  {c.assignedTo && (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      <User size={13} className="text-primary" />
+                      <strong>Assigned to:</strong> {c.assignedTo}
+                    </span>
+                  )}
+                </div>
+              )}
 
               {c.adminNotes && (
                 <div
@@ -297,7 +349,7 @@ export default function Complaints({ currentUser, onToast }) {
                 <span>
                   Reported by: <strong>{c.reportedByName}</strong> ({c.reportedByRoll})
                 </span>
-                <span>{new Date(c.createdAt).toLocaleDateString()}</span>
+                <span>{formatDisplayDate(c.createdAt)}</span>
               </div>
             </div>
           ))}
@@ -329,17 +381,31 @@ export default function Complaints({ currentUser, onToast }) {
                 </select>
               </div>
 
-              <div className="form-group" style={{ marginBottom: '1rem' }}>
-                <label className="input-label" htmlFor="itemName">Equipment / Component Name *</label>
-                <input
-                  id="itemName"
-                  type="text"
-                  className="input-field"
-                  placeholder="e.g. Bench 4 Soldering Station or ESP32-CAM"
-                  value={itemName}
-                  onChange={(e) => setItemName(e.target.value)}
-                  required
-                />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                <div className="form-group">
+                  <label className="input-label" htmlFor="itemName">Equipment / Component Name *</label>
+                  <input
+                    id="itemName"
+                    type="text"
+                    className="input-field"
+                    placeholder="e.g. Bench 4 Soldering Station or ESP32-CAM"
+                    value={itemName}
+                    onChange={(e) => setItemName(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="input-label" htmlFor="locationDetails">Specific Bench / Lab Location</label>
+                  <input
+                    id="locationDetails"
+                    type="text"
+                    className="input-field"
+                    placeholder="e.g. Bench 4 / Microcontroller Bay"
+                    value={locationDetails}
+                    onChange={(e) => setLocationDetails(e.target.value)}
+                  />
+                </div>
               </div>
 
               <div className="form-group" style={{ marginBottom: '1.25rem' }}>
@@ -391,19 +457,33 @@ export default function Complaints({ currentUser, onToast }) {
                 </p>
               </div>
 
-              <div className="form-group" style={{ marginBottom: '1rem' }}>
-                <label className="input-label" htmlFor="newStatus">Action Status</label>
-                <select
-                  id="newStatus"
-                  className="input-field"
-                  value={newStatus}
-                  onChange={(e) => setNewStatus(e.target.value)}
-                >
-                  <option value="pending">Pending</option>
-                  <option value="in_progress">In Progress (Repairing / Ordering)</option>
-                  <option value="resolved">Resolved (Complete)</option>
-                  <option value="dismissed">Dismissed</option>
-                </select>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                <div className="form-group">
+                  <label className="input-label" htmlFor="newStatus">Action Status</label>
+                  <select
+                    id="newStatus"
+                    className="input-field"
+                    value={newStatus}
+                    onChange={(e) => setNewStatus(e.target.value)}
+                  >
+                    <option value="pending">Pending</option>
+                    <option value="in_progress">In Progress (Repairing / Ordering)</option>
+                    <option value="resolved">Resolved (Complete)</option>
+                    <option value="dismissed">Dismissed</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="input-label" htmlFor="assignedTo">Assign Technician / Staff</label>
+                  <input
+                    id="assignedTo"
+                    type="text"
+                    className="input-field"
+                    placeholder="e.g. Lab Technician Suresh"
+                    value={assignedTo}
+                    onChange={(e) => setAssignedTo(e.target.value)}
+                  />
+                </div>
               </div>
 
               <div className="form-group" style={{ marginBottom: '1.25rem' }}>

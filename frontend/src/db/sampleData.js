@@ -26,7 +26,7 @@ export const INITIAL_USERS = [
     passwordHash: 'admin123',
     department: 'Incubation Director',
     fingerprintIds: [1, 2, 3],
-    faceRegistered: true,
+    faceRegistered: false,
     createdAt: '2026-08-01T08:00:00.000Z',
   },
   {
@@ -38,7 +38,7 @@ export const INITIAL_USERS = [
     passwordHash: 'subadmin123',
     department: 'Associate Lab Manager',
     fingerprintIds: [4, 5, 6],
-    faceRegistered: true,
+    faceRegistered: false,
     createdAt: '2026-08-05T09:00:00.000Z',
   },
   {
@@ -51,7 +51,7 @@ export const INITIAL_USERS = [
     department: 'Electronics & Communication Engineering',
     fingerprintIds: [10, 11, 12],
     fingerLabels: ['Right Thumb', 'Right Index', 'Left Index'],
-    faceRegistered: true,
+    faceRegistered: false,
     createdAt: '2026-08-20T10:00:00.000Z',
   },
   {
@@ -64,7 +64,7 @@ export const INITIAL_USERS = [
     department: 'Electronics & Communication Engineering',
     fingerprintIds: [13, 14, 15],
     fingerLabels: ['Right Thumb', 'Left Thumb', 'Right Index'],
-    faceRegistered: true,
+    faceRegistered: false,
     createdAt: '2026-08-22T11:00:00.000Z',
   },
   {
@@ -77,7 +77,7 @@ export const INITIAL_USERS = [
     department: 'Computer Science & Engineering',
     fingerprintIds: [16, 17, 18],
     fingerLabels: ['Right Thumb', 'Right Middle', 'Left Thumb'],
-    faceRegistered: true,
+    faceRegistered: false,
     createdAt: '2026-08-25T14:30:00.000Z',
   },
   {
@@ -90,7 +90,7 @@ export const INITIAL_USERS = [
     department: 'Electrical & Electronics Engineering',
     fingerprintIds: [19, 20, 21],
     fingerLabels: ['Right Thumb', 'Right Index', 'Left Index'],
-    faceRegistered: true,
+    faceRegistered: false,
     createdAt: '2026-08-24T09:15:00.000Z',
   },
   {
@@ -107,7 +107,7 @@ export const INITIAL_USERS = [
     retentionEndDate: '2027-07-31',
     fingerprintIds: [22, 23, 24],
     fingerLabels: ['Right Thumb', 'Right Index', 'Left Index'],
-    faceRegistered: true,
+    faceRegistered: false,
     createdAt: '2023-08-01T10:00:00.000Z',
   },
 ];
@@ -478,27 +478,27 @@ export const INITIAL_COMPONENTS = [
   },
 ];
 
-// Sample Active and Completed Visits (Entry/Exit Tracking)
+// Sample Completed Visits (Entry/Exit Tracking) - Zero stale inside visits
 export const INITIAL_VISITS = [
   {
     id: 'VISIT-20260913-001',
     studentRoll: '238W1A0477',
     studentName: 'Anwar Bajarinti',
-    entryTime: new Date(Date.now() - 75 * 60 * 1000).toISOString(), // 1 hr 15 min ago (Currently Inside!)
-    exitTime: null,
-    durationMinutes: null,
-    status: 'inside',
+    entryTime: '2026-09-13T08:00:00.000Z',
+    exitTime: '2026-09-13T09:15:00.000Z',
+    durationMinutes: 75,
+    status: 'completed',
     entryMethod: 'fingerprint',
   },
   {
     id: 'VISIT-20260913-002',
     studentRoll: '228W1A0520',
     studentName: 'Rahul Varma',
-    entryTime: new Date(Date.now() - 45 * 60 * 1000).toISOString(), // 45 min ago (Currently Inside!)
-    exitTime: null,
-    durationMinutes: null,
-    status: 'inside',
-    entryMethod: 'face',
+    entryTime: '2026-09-13T09:30:00.000Z',
+    exitTime: '2026-09-13T10:15:00.000Z',
+    durationMinutes: 45,
+    status: 'completed',
+    entryMethod: 'manual',
   },
   {
     id: 'VISIT-20260913-003',
@@ -528,7 +528,7 @@ export const INITIAL_VISITS = [
     exitTime: '2026-09-11T16:30:00.000Z',
     durationMinutes: 150,
     status: 'completed',
-    entryMethod: 'face',
+    entryMethod: 'fingerprint',
   },
 ];
 

@@ -31,12 +31,14 @@ export function toDbRow(table, obj) {
       if (row.academicYearAtStart !== undefined) { row.academic_year_at_start = row.academicYearAtStart !== null ? Number(row.academicYearAtStart) : null; delete row.academicYearAtStart; }
       if (row.retentionPeriodYears !== undefined) { row.retention_period_years = row.retentionPeriodYears !== null ? Number(row.retentionPeriodYears) : null; delete row.retentionPeriodYears; }
       if (row.retentionEndDate !== undefined) { row.retention_end_date = row.retentionEndDate; delete row.retentionEndDate; }
-      if (row.idCardValidityYear !== undefined) { row.id_card_validity_year = row.idCardValidityYear !== null ? Number(row.idCardValidityYear) : null; delete row.idCardValidityYear; }
+      delete row.idCardValidityYear;
+      delete row.id_card_validity_year;
+      delete row.idCardScannedAt;
+      delete row.id_card_scanned_at;
       if (row.branch !== undefined) { row.branch = row.branch; }
       if (row.section !== undefined) { row.section = row.section; }
       if (row.academicYear !== undefined) { row.academic_year = Number(row.academicYear); delete row.academicYear; }
       if (row.avatarTheme !== undefined) { row.avatar_theme = row.avatarTheme; delete row.avatarTheme; }
-      if (row.idCardScannedAt !== undefined) { row.id_card_scanned_at = row.idCardScannedAt; delete row.idCardScannedAt; }
       break;
 
     case 'components':
@@ -51,6 +53,14 @@ export function toDbRow(table, obj) {
       if (row.componentNumber !== undefined) { row.component_number = row.componentNumber; delete row.componentNumber; }
       if (row.parentCategory !== undefined) { row.parent_category = row.parentCategory; delete row.parentCategory; }
       if (row.locationDetails !== undefined) { row.location_details = row.locationDetails; delete row.locationDetails; }
+      if (row.categoryId !== undefined) { row.category_id = row.categoryId; delete row.categoryId; }
+      if (row.locationPhotoUrl !== undefined) { row.location_photo_url = row.locationPhotoUrl; delete row.locationPhotoUrl; }
+      if (row.locationPhotoRef !== undefined) { row.location_photo_ref = row.locationPhotoRef; delete row.locationPhotoRef; }
+      if (row.individualIds !== undefined) { row.individual_ids = row.individualIds; delete row.individualIds; }
+      break;
+
+    case 'component_categories':
+      if (row.parentId !== undefined) { row.parent_id = row.parentId; delete row.parentId; }
       break;
 
     case 'projects':
@@ -60,6 +70,13 @@ export function toDbRow(table, obj) {
       if (row.linkedinLink !== undefined) { row.linkedin_link = row.linkedinLink; delete row.linkedinLink; }
       if (row.prototypeAvailable !== undefined) { row.prototype_available = Boolean(row.prototypeAvailable); delete row.prototypeAvailable; }
       if (row.titleChangeRequest !== undefined) { row.title_change_request = row.titleChangeRequest; delete row.titleChangeRequest; }
+      if (row.approvedBudget !== undefined) { row.approved_budget = Number(row.approvedBudget); delete row.approvedBudget; }
+      if (row.estimatedBudget !== undefined) { row.estimated_budget = Number(row.estimatedBudget); delete row.estimatedBudget; }
+      if (row.fundingSource !== undefined) { row.funding_source = row.fundingSource; delete row.fundingSource; }
+      if (row.totalSpent !== undefined) { row.total_spent = Number(row.totalSpent); delete row.totalSpent; }
+      if (row.remainingBudget !== undefined) { row.remaining_budget = Number(row.remainingBudget); delete row.remainingBudget; }
+      if (row.demoUrl !== undefined) { row.demo_url = row.demoUrl; delete row.demoUrl; }
+      if (row.achievementIds !== undefined) { row.achievement_ids = row.achievementIds; delete row.achievementIds; }
       break;
 
     case 'teams':
@@ -85,6 +102,18 @@ export function toDbRow(table, obj) {
     case 'events':
       if (row.eventDate !== undefined) { row.event_date = row.eventDate; delete row.eventDate; }
       if (row.isInnovationDay !== undefined) { row.is_innovation_day = Boolean(row.isInnovationDay); delete row.isInnovationDay; }
+      delete row.updated_at;
+      delete row.updatedAt;
+      delete row.organizer;
+      delete row.prizeMoney;
+      delete row.participatingTeams;
+      delete row.externalUrl;
+      delete row.outcomes;
+      delete row.time;
+      delete row.venue;
+      delete row.category;
+      delete row.registrationLink;
+      delete row.maxParticipants;
       break;
 
     case 'complaints':
@@ -114,6 +143,8 @@ export function toDbRow(table, obj) {
       if (row.entryTime !== undefined) { row.entry_time = row.entryTime; delete row.entryTime; }
       if (row.exitTime !== undefined) { row.exit_time = row.exitTime; delete row.exitTime; }
       if (row.durationMinutes !== undefined) { row.duration_minutes = Number(row.durationMinutes); delete row.durationMinutes; }
+      delete row.updated_at;
+      delete row.updatedAt;
       break;
 
     case 'devices':
@@ -146,6 +177,9 @@ export function toDbRow(table, obj) {
       if (row.issueDate !== undefined) { row.issue_date = row.issueDate; delete row.issueDate; }
       if (row.overallDueDate !== undefined) { row.overall_due_date = row.overallDueDate; delete row.overallDueDate; }
       if (row.returnedDate !== undefined) { row.returned_date = row.returnedDate; delete row.returnedDate; }
+      if (row.lastReturnDate !== undefined) { row.last_return_date = row.lastReturnDate; delete row.lastReturnDate; }
+      delete row.studentPhone;
+      delete row.student_phone;
       break;
 
     case 'authorizations':
@@ -195,6 +229,11 @@ export function fromDbRow(table, row) {
 
   switch (table) {
     case 'users':
+    case 'staff_student_directory':
+    case 'student_directory':
+    case 'get_my_profile':
+    case 'my_profile':
+      if (obj.role === undefined) obj.role = 'student';
       if (obj.roll_number !== undefined) obj.rollNumber = obj.roll_number;
       if (obj.mobile_number !== undefined) obj.mobileNumber = obj.mobile_number;
       if (obj.password_hash !== undefined) obj.passwordHash = obj.password_hash;
@@ -203,6 +242,9 @@ export function fromDbRow(table, row) {
       if (obj.face_registered !== undefined) obj.faceRegistered = Boolean(obj.face_registered);
       if (obj.face_photo_url !== undefined) obj.facePhotoUrl = obj.face_photo_url;
       if (obj.auth_id !== undefined) obj.authId = obj.auth_id;
+      if (obj.is_active !== undefined) {
+        obj.isActive = obj.is_active !== null ? Boolean(obj.is_active) : null;
+      }
       if (obj.incubation_start_date !== undefined) obj.incubationStartDate = obj.incubation_start_date;
       if (obj.academic_year_at_start !== undefined) obj.academicYearAtStart = obj.academic_year_at_start;
       if (obj.retention_period_years !== undefined) obj.retentionPeriodYears = obj.retention_period_years;
@@ -228,6 +270,13 @@ export function fromDbRow(table, row) {
       if (obj.component_number !== undefined) obj.componentNumber = obj.component_number;
       if (obj.parent_category !== undefined) obj.parentCategory = obj.parent_category;
       if (obj.location_details !== undefined) obj.locationDetails = obj.location_details;
+      if (obj.category_id !== undefined) obj.categoryId = obj.category_id;
+      if (obj.location_photo_url !== undefined) obj.locationPhotoUrl = obj.location_photo_url;
+      if (obj.location_photo_ref !== undefined) obj.locationPhotoRef = obj.location_photo_ref;
+      break;
+
+    case 'component_categories':
+      if (obj.parent_id !== undefined) obj.parentId = obj.parent_id;
       break;
 
     case 'projects':
@@ -237,6 +286,13 @@ export function fromDbRow(table, row) {
       if (obj.linkedin_link !== undefined) obj.linkedinLink = obj.linkedin_link;
       if (obj.prototype_available !== undefined) obj.prototypeAvailable = Boolean(obj.prototype_available);
       if (obj.title_change_request !== undefined) obj.titleChangeRequest = obj.title_change_request;
+      if (obj.approved_budget !== undefined) obj.approvedBudget = Number(obj.approved_budget) || 0;
+      if (obj.estimated_budget !== undefined) obj.estimatedBudget = Number(obj.estimated_budget) || 0;
+      if (obj.funding_source !== undefined) obj.fundingSource = obj.funding_source;
+      if (obj.total_spent !== undefined) obj.totalSpent = Number(obj.total_spent) || 0;
+      if (obj.remaining_budget !== undefined) obj.remainingBudget = Number(obj.remaining_budget) || 0;
+      if (obj.demo_url !== undefined) obj.demoUrl = obj.demo_url;
+      if (obj.achievement_ids !== undefined) obj.achievementIds = Array.isArray(obj.achievement_ids) ? obj.achievement_ids : [];
       break;
 
     case 'teams':
@@ -323,6 +379,7 @@ export function fromDbRow(table, row) {
       if (obj.issue_date !== undefined) obj.issueDate = obj.issue_date;
       if (obj.overall_due_date !== undefined) obj.overallDueDate = obj.overall_due_date;
       if (obj.returned_date !== undefined) obj.returnedDate = obj.returned_date;
+      if (obj.last_return_date !== undefined) obj.lastReturnDate = obj.last_return_date;
       if (obj.items !== undefined && Array.isArray(obj.items)) obj.items = obj.items;
       break;
 

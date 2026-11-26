@@ -23,14 +23,18 @@ import {
   isItemOverdue,
   isTransactionOverdue,
   getOverdueDays,
+  getCategories,
   subscribeToDb,
 } from '../../db/database';
+import { formatDisplayDate } from '../../utils/dateFormatter';
+import CategoryBreadcrumb from '../../utils/categoryHelper.jsx';
 
 export default function Transactions({ setActiveTab, onOpenReturnWithRoll }) {
   const [transactionsList, setTransactionsList] = useState([]);
   const [filterStatus, setFilterStatus] = useState('all'); // 'all' | 'active' | 'partially_returned' | 'returned' | 'overdue'
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedTxnId, setExpandedTxnId] = useState(null);
+  const [categories, setCategories] = useState([]);
 
   useEffect(() => {
     loadData();
@@ -40,6 +44,7 @@ export default function Transactions({ setActiveTab, onOpenReturnWithRoll }) {
 
   function loadData() {
     setTransactionsList(getTransactions(filterStatus, searchQuery));
+    setCategories(getCategories());
   }
 
   function toggleExpand(id) {
@@ -162,18 +167,18 @@ export default function Transactions({ setActiveTab, onOpenReturnWithRoll }) {
                           </div>
                         </td>
                         <td className="text-sm">
-                          {new Date(txn.issueDate).toLocaleDateString()}
+                          {formatDisplayDate(txn.issueDate)}
                         </td>
                         <td className="text-sm">
                           <span style={{ color: isOverdue ? 'var(--danger-text)' : 'inherit', fontWeight: isOverdue ? 700 : 400 }}>
-                            {new Date(txn.overallDueDate).toLocaleDateString()}
+                            {formatDisplayDate(txn.overallDueDate)}
                           </span>
                         </td>
                         <td className="text-sm">
                           {txn.returnedDate ? (
-                            <span>{new Date(txn.returnedDate).toLocaleDateString()}</span>
+                            <span>{formatDisplayDate(txn.returnedDate)}</span>
                           ) : txn.lastReturnDate ? (
-                            <span className="text-xs text-muted">Partial on {new Date(txn.lastReturnDate).toLocaleDateString()}</span>
+                            <span className="text-xs text-muted">Partial on {formatDisplayDate(txn.lastReturnDate)}</span>
                           ) : (
                             <span className="text-muted">—</span>
                           )}
@@ -259,7 +264,7 @@ export default function Transactions({ setActiveTab, onOpenReturnWithRoll }) {
                                       return (
                                         <tr key={it.componentId}>
                                           <td style={{ fontWeight: 600 }}>{it.componentName}</td>
-                                          <td><span className="badge badge-neutral">{it.category}</span></td>
+                                          <td><CategoryBreadcrumb component={it} categories={categories} fontSize="0.75rem" /></td>
                                           <td>{it.issuedQuantity}</td>
                                           <td><span style={{ color: 'var(--success-text)', fontWeight: 600 }}>{it.returnedQuantity}</span></td>
                                           <td>
@@ -293,7 +298,7 @@ export default function Transactions({ setActiveTab, onOpenReturnWithRoll }) {
                                           </td>
                                           <td>
                                             <span className="text-xs">
-                                              {new Date(it.dueDate).toLocaleDateString()}
+                                              {formatDisplayDate(it.dueDate)}
                                             </span>
                                             {isLate && (
                                               <span className="badge badge-danger" style={{ marginLeft: '0.5rem' }}>

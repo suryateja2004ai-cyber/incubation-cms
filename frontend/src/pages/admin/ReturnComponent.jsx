@@ -21,15 +21,20 @@ import {
   getActiveTransactionsForStudent,
   returnComponents,
   getStudentByRoll,
+  getComponentById,
   isItemOverdue,
   getOverdueDays,
+  getCategories,
   subscribeToDb,
 } from '../../db/database';
+import { formatDisplayDate, formatDisplayDateTime } from '../../utils/dateFormatter';
+import CategoryBreadcrumb from '../../utils/categoryHelper.jsx';
 
-export default function ReturnComponent({ onOpenOcrModal, scannedStudent, onClearScannedStudent, onToast, setActiveTab }) {
+export default function ReturnComponent({ currentUser, onOpenOcrModal, scannedStudent, onClearScannedStudent, onToast, setActiveTab }) {
   const [studentRoll, setStudentRoll] = useState('');
   const [studentName, setStudentName] = useState('');
   const [activeTransactions, setActiveTransactions] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [hasSearched, setHasSearched] = useState(false);
 
   // Return selections: map of txnId -> map of componentId -> { returnQuantity, returnedIndividualIds }
@@ -39,10 +44,12 @@ export default function ReturnComponent({ onOpenOcrModal, scannedStudent, onClea
   const [successResult, setSuccessResult] = useState(null);
 
   useEffect(() => {
+    setCategories(getCategories());
     if (studentRoll.trim()) {
       searchActiveBorrows(studentRoll);
     }
     const unsubscribe = subscribeToDb(() => {
+      setCategories(getCategories());
       if (studentRoll.trim()) {
         searchActiveBorrows(studentRoll);
       }
@@ -143,6 +150,26 @@ export default function ReturnComponent({ onOpenOcrModal, scannedStudent, onClea
     });
   }
 
+  // Helper to resolve pending individual tags for an issued item
+  function getPendingTagsForItem(txn, item) {
+    const comp = getComponentById(item.componentId);
+    let allItemTags = [];
+    if (Array.isArray(item.individualIds) && item.individualIds.length > 0) {
+      allItemTags = item.individualIds;
+    } else if (Array.isArray(item.selectedIndividualIds) && item.selectedIndividualIds.length > 0) {
+      allItemTags = item.selectedIndividualIds;
+    } else if (comp && Array.isArray(comp.individualIds)) {
+      const matched = comp.individualIds
+        .filter((t) => t.currentTransactionId === txn.id || (t.status === 'issued' && t.currentStudentRoll === txn.studentRoll))
+        .map((t) => t.id);
+      if (matched.length > 0) {
+        allItemTags = matched;
+      }
+    }
+    const returned = Array.isArray(item.returnedIndividualIds) ? item.returnedIndividualIds : [];
+    return allItemTags.filter((id) => !returned.includes(id));
+  }
+
   // Quick helper: Select All currently pending items for a transaction
   function handleSelectAllForTxn(txn) {
     setReturnSelections((prev) => {
@@ -150,13 +177,11 @@ export default function ReturnComponent({ onOpenOcrModal, scannedStudent, onClea
       for (const item of txn.items) {
         const remaining = item.issuedQuantity - item.returnedQuantity;
         if (remaining > 0) {
-          if (item.trackingMode === 'individual') {
-            const pendingTags = (item.individualIds || []).filter(
-              (id) => !(item.returnedIndividualIds || []).includes(id)
-            );
+          const pendingTags = getPendingTagsForItem(txn, item);
+          if (item.trackingMode === 'individual' && pendingTags.length > 0) {
             txnMap[item.componentId] = {
               returnQuantity: pendingTags.length,
-              returnedIndividualIds: pendingTags,
+              returnedIndividualIds: [...pendingTags],
             };
           } else {
             txnMap[item.componentId] = {
@@ -174,7 +199,7 @@ export default function ReturnComponent({ onOpenOcrModal, scannedStudent, onClea
   }
 
   // Submit return for a transaction
-  function handleProcessReturn(txn) {
+  async function handleProcessReturn(txn) {
     setErrorMessage('');
     try {
       const txnSelections = returnSelections[txn.id] || {};
@@ -194,7 +219,7 @@ export default function ReturnComponent({ onOpenOcrModal, scannedStudent, onClea
         throw new Error('Please select at least one component or tag to return.');
       }
 
-      const updatedTxn = returnComponents(txn.id, returnedPayload);
+      const updatedTxn = await returnComponents(txn.id, returnedPayload, currentUser);
       setSuccessResult({
         txnId: updatedTxn.id,
         status: updatedTxn.status,
@@ -227,12 +252,9 @@ export default function ReturnComponent({ onOpenOcrModal, scannedStudent, onClea
             Return Components
           </h2>
           <p className="text-muted" style={{ fontSize: '0.9rem' }}>
-            Scan student ID card, retrieve active loans, and record complete or partial returns
+            Retrieve active loans and record complete or partial returns
           </p>
         </div>
-        <button type="button" className="btn btn-secondary" onClick={onOpenOcrModal}>
-          <Camera size={18} /> Scan Student ID Card
-        </button>
       </div>
 
       {/* Student Identification & Lookup Card */}
@@ -241,7 +263,7 @@ export default function ReturnComponent({ onOpenOcrModal, scannedStudent, onClea
           <h3 className="card-title">
             <Search size={18} /> Student Lookup
           </h3>
-          <span className="badge badge-neutral">OCR or Manual Entry</span>
+          <span className="badge badge-neutral">Manual Roll Lookup</span>
         </div>
         <div className="card-body">
           {errorMessage && (
@@ -260,6 +282,7 @@ export default function ReturnComponent({ onOpenOcrModal, scannedStudent, onClea
                 <input
                   type="text"
                   className="input-field uppercase-input"
+                  data-tour="return-roll-input"
                   placeholder="e.g. 238W1A0477"
                   value={studentRoll}
                   onChange={(e) => {
@@ -270,17 +293,10 @@ export default function ReturnComponent({ onOpenOcrModal, scannedStudent, onClea
                 <button
                   type="button"
                   className="btn btn-primary"
+                  data-tour="return-search-btn"
                   onClick={() => searchActiveBorrows(studentRoll)}
                 >
                   <Search size={16} /> Search Loans
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={onOpenOcrModal}
-                  title="Scan with Camera"
-                >
-                  <Camera size={18} />
                 </button>
               </div>
               <span className="input-hint">Search for all active issued components under this roll number</span>
@@ -386,7 +402,7 @@ export default function ReturnComponent({ onOpenOcrModal, scannedStudent, onClea
               </div>
             </div>
           ) : (
-            <div>
+            <div data-tour="return-txns-list">
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
                 <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--neutral-900)' }}>
                   Active Issued Transactions ({activeTransactions.length})
@@ -416,7 +432,7 @@ export default function ReturnComponent({ onOpenOcrModal, scannedStudent, onClea
                           )}
                         </div>
                         <div className="text-xs text-muted" style={{ marginTop: '0.2rem' }}>
-                          Issued: {new Date(txn.issueDate).toLocaleString()} • Overall Due: {new Date(txn.overallDueDate).toLocaleDateString()}
+                          Issued: {formatDisplayDateTime(txn.issueDate)} • Overall Due: {formatDisplayDate(txn.overallDueDate)}
                         </div>
                       </div>
 
@@ -453,9 +469,8 @@ export default function ReturnComponent({ onOpenOcrModal, scannedStudent, onClea
                                 returnedIndividualIds: [],
                               };
 
-                              const pendingTags = item.trackingMode === 'individual'
-                                ? (item.individualIds || []).filter((id) => !(item.returnedIndividualIds || []).includes(id))
-                                : [];
+                              const pendingTags = getPendingTagsForItem(txn, item);
+                              const hasPhysicalTags = item.trackingMode === 'individual' && pendingTags.length > 0;
 
                               return (
                                 <tr key={item.componentId} style={{ opacity: isItemDone ? 0.5 : 1 }}>
@@ -463,8 +478,9 @@ export default function ReturnComponent({ onOpenOcrModal, scannedStudent, onClea
                                     <div style={{ fontWeight: 700, color: 'var(--neutral-900)' }}>
                                       {item.componentName}
                                     </div>
-                                    <div className="text-xs text-muted">
-                                      {item.category} • Due: {new Date(item.dueDate).toLocaleDateString()}
+                                    <div className="text-xs text-muted" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap', marginTop: '0.2rem' }}>
+                                      <CategoryBreadcrumb component={item} categories={categories} fontSize="0.75rem" />
+                                      <span>• Due: {formatDisplayDate(item.dueDate)}</span>
                                       {isItemLate && (
                                         <span style={{ color: 'var(--danger-text)', fontWeight: 700, marginLeft: '0.35rem' }}>
                                           (Overdue by {itemOverdueDays} days!)
@@ -473,11 +489,32 @@ export default function ReturnComponent({ onOpenOcrModal, scannedStudent, onClea
                                     </div>
 
                                     {/* Physical IDs breakdown if tracked individually */}
-                                    {item.trackingMode === 'individual' && pendingTags.length > 0 && (
+                                    {hasPhysicalTags && (
                                       <div style={{ marginTop: '0.5rem' }}>
-                                        <span className="text-xs font-semibold" style={{ display: 'block', marginBottom: '0.25rem' }}>
-                                          Check off returning tag(s):
-                                        </span>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                                          <span className="text-xs font-semibold">
+                                            Check off returning tag(s):
+                                          </span>
+                                          <button
+                                            type="button"
+                                            className="btn btn-link btn-xs"
+                                            style={{ fontSize: '0.75rem', padding: 0, color: 'var(--primary)', cursor: 'pointer' }}
+                                            onClick={() => {
+                                              setReturnSelections((prev) => ({
+                                                ...prev,
+                                                [txn.id]: {
+                                                  ...(prev[txn.id] || {}),
+                                                  [item.componentId]: {
+                                                    returnQuantity: pendingTags.length,
+                                                    returnedIndividualIds: [...pendingTags],
+                                                  },
+                                                },
+                                              }));
+                                            }}
+                                          >
+                                            Select All ({pendingTags.length})
+                                          </button>
+                                        </div>
                                         <div className="id-chips-container">
                                           {pendingTags.map((tagId) => {
                                             const isSelected = currentSelection.returnedIndividualIds.includes(tagId);
@@ -513,11 +550,32 @@ export default function ReturnComponent({ onOpenOcrModal, scannedStudent, onClea
                                   <td>
                                     {isItemDone ? (
                                       <span className="text-muted text-xs">All Returned</span>
-                                    ) : item.trackingMode === 'individual' ? (
-                                      <div>
+                                    ) : hasPhysicalTags ? (
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                                         <span className="badge badge-info">
                                           {currentSelection.returnedIndividualIds.length} tag(s) selected
                                         </span>
+                                        {currentSelection.returnedIndividualIds.length === 0 && (
+                                          <button
+                                            type="button"
+                                            className="btn btn-secondary btn-sm"
+                                            style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                                            onClick={() => {
+                                              setReturnSelections((prev) => ({
+                                                ...prev,
+                                                [txn.id]: {
+                                                  ...(prev[txn.id] || {}),
+                                                  [item.componentId]: {
+                                                    returnQuantity: pendingTags.length,
+                                                    returnedIndividualIds: [...pendingTags],
+                                                  },
+                                                },
+                                              }));
+                                            }}
+                                          >
+                                            Select All
+                                          </button>
+                                        )}
                                       </div>
                                     ) : (
                                       <div className="quantity-stepper">
@@ -556,6 +614,7 @@ export default function ReturnComponent({ onOpenOcrModal, scannedStudent, onClea
                         <button
                           type="button"
                           className="btn btn-success"
+                          data-tour="return-submit-btn"
                           onClick={() => handleProcessReturn(txn)}
                         >
                           <ArrowDownLeft size={18} /> Confirm Selected Returns

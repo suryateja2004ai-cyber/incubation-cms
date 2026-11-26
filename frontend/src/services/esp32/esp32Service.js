@@ -20,17 +20,60 @@ export const DEVICE_HARDWARE_STATES = {
 
 class Esp32Service {
   constructor() {
+    this.gatewayEndpoint = 'http://127.0.0.1:5050';
     this.endpoint = 'http://esp32-lab.local';
+    this.isGatewayOnline = false;
+    this.isLocalLabNetwork = false;
     this.isOnline = true;
     this.isEmergencyFallbackActive = false;
     this.mode = HARDWARE_MODES.SIMULATION; // Default to simulation until real controller connected
     this.pollTimer = null;
     this.statusListeners = new Set();
     this.deviceStates = new Map(); // deviceId -> { state, lastConfirmedAt, error }
+
+    // Preserve function binding across all callers and destructuring
+    this.checkGatewayHealth = this.checkGatewayHealth.bind(this);
+    this.getMode = this.getMode.bind(this);
+    this.setMode = this.setMode.bind(this);
+    this.getDeviceState = this.getDeviceState.bind(this);
+    this.setDeviceState = this.setDeviceState.bind(this);
+    this.subscribeStatus = this.subscribeStatus.bind(this);
+    this.notifyStatus = this.notifyStatus.bind(this);
+    this.setEmergencyFallback = this.setEmergencyFallback.bind(this);
+    this.sendCommand = this.sendCommand.bind(this);
+    this.handlePhysicalSwitchEvent = this.handlePhysicalSwitchEvent.bind(this);
+  }
+
+  async checkGatewayHealth() {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1200);
+      const res = await fetch(`${this.gatewayEndpoint}/api/gateway/health`, {
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        this.isGatewayOnline = data.status === 'online';
+        this.isLocalLabNetwork = Boolean(data.isLocalLabNetwork);
+      } else {
+        this.isGatewayOnline = false;
+        this.isLocalLabNetwork = false;
+      }
+    } catch {
+      this.isGatewayOnline = false;
+      this.isLocalLabNetwork = false;
+    }
+    this.notifyStatus();
+    return {
+      isGatewayOnline: this.isGatewayOnline,
+      isLocalLabNetwork: this.isLocalLabNetwork,
+    };
   }
 
   init() {
     try {
+      this.checkGatewayHealth().catch(() => {});
       const settings = getSettings();
       if (settings.esp32Endpoint) {
         this.endpoint = settings.esp32Endpoint;
@@ -89,6 +132,8 @@ class Esp32Service {
   notifyStatus() {
     const payload = {
       isOnline: this.isOnline,
+      isGatewayOnline: this.isGatewayOnline,
+      isLocalLabNetwork: this.isLocalLabNetwork,
       mode: this.mode,
       fallback: this.isEmergencyFallbackActive,
       deviceStates: Object.fromEntries(this.deviceStates),
@@ -115,7 +160,7 @@ class Esp32Service {
   async sendCommand(deviceId, state, brightness = null, speed = null, actor = null) {
     // 1. Mark state: COMMAND_SENT
     this.setDeviceState(deviceId, DEVICE_HARDWARE_STATES.COMMAND_SENT);
-    setDeviceCommandState(deviceId, state, brightness, speed, actor);
+    await setDeviceCommandState(deviceId, state, brightness, speed, actor);
 
     // 2. Mark state: WAITING_CONFIRMATION
     this.setDeviceState(deviceId, DEVICE_HARDWARE_STATES.WAITING_CONFIRMATION);
@@ -132,8 +177,21 @@ class Esp32Service {
       };
     }
 
-    // A. REAL HARDWARE MODE: Never simulate confirmation!
+    // A. REAL HARDWARE MODE: Routed strictly through Local Lab Gateway
     if (this.mode === HARDWARE_MODES.REAL_HARDWARE) {
+      // SECURITY CHECK: Verify Local Lab Gateway is online and reachable on local subnet
+      if (!this.isGatewayOnline) {
+        await this.checkGatewayHealth();
+      }
+
+      if (!this.isGatewayOnline) {
+        this.setDeviceState(deviceId, DEVICE_HARDWARE_STATES.FAILED, 'Local Lab Gateway unavailable');
+        throw new Error(
+          'Device Control Blocked: Physical device control is restricted to the local laboratory network. ' +
+          'Remote operation from outside the lab or through the cloud is prohibited.'
+        );
+      }
+
       try {
         const payload = {
           deviceId,
@@ -144,22 +202,35 @@ class Esp32Service {
         };
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 2500); // 2.5s physical network timeout
+        const timeoutId = setTimeout(() => controller.abort(), 2500);
 
-        const response = await fetch(`${this.endpoint}/api/device/control`, {
+        const actorToken = actor?.token || actor?.authId || (actor?.role ? `mock-token-${actor.role}` : '');
+        const reqNonce = typeof crypto !== 'undefined' && crypto.randomUUID
+          ? crypto.randomUUID()
+          : Math.random().toString(36).slice(2) + Date.now().toString(36);
+        const reqTimestamp = Date.now().toString();
+
+        const response = await fetch(`${this.gatewayEndpoint}/api/gateway/device/control`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Request-Timestamp': reqTimestamp,
+            'X-Request-Nonce': reqNonce,
+            'X-Requested-With': 'VRSECLabGateway',
+            'X-Lab-CSRF': '1',
+            ...(actorToken ? { Authorization: `Bearer ${actorToken}` } : {}),
+          },
           body: JSON.stringify(payload),
           signal: controller.signal,
         });
         clearTimeout(timeoutId);
 
         if (!response.ok) {
-          throw new Error(`ESP32 returned HTTP error: ${response.status} ${response.statusText}`);
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.error || `Local Gateway returned HTTP error ${response.status}`);
         }
 
         const data = await response.json();
-        // Hardware must confirm the physical circuit / relay state
         const confirmedActual = data.confirmedState || state;
         updateDeviceConfirmedState(deviceId, confirmedActual, brightness, speed);
         this.isOnline = true;
@@ -173,13 +244,12 @@ class Esp32Service {
       } catch (err) {
         const isAbort = err.name === 'AbortError';
         const errMsg = isAbort
-          ? 'ESP32 controller did not respond within 2.5s timeout'
-          : (err.message || 'Failed to communicate with physical ESP32 controller');
+          ? 'Local Lab Gateway did not respond within 2.5s timeout'
+          : (err.message || 'Failed to communicate with Local Lab Gateway');
 
         this.isOnline = false;
         this.setDeviceState(deviceId, DEVICE_HARDWARE_STATES.FAILED, errMsg);
-        // In Real Hardware Mode, NEVER falsely acknowledge success!
-        throw new Error(`[REAL HARDWARE ERROR] ${errMsg}. Device marked as FAILED.`);
+        throw new Error(`[LOCAL GATEWAY ERROR] ${errMsg}. Device marked as FAILED.`);
       }
     }
 
@@ -214,3 +284,10 @@ class Esp32Service {
 
 export const esp32Service = new Esp32Service();
 esp32Service.init();
+
+// Standalone function export for direct checkGatewayHealth usage
+export const checkGatewayHealth = () => esp32Service.checkGatewayHealth();
+
+// Export class and instance both as named and default exports
+export { Esp32Service };
+export default esp32Service;

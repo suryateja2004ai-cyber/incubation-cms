@@ -4,11 +4,172 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Incubation-CMS | Incubation Centre Component Management System</title>
-    <meta name="description" content="Offline-first Incubation Centre Electronic Component Management System with Student ID OCR" />
+    <title>VRSEC Incubation Centre Management System</title>
+    <meta name="description" content="VRSEC Incubation Centre Management System — Component tracking, lab attendance, projects, and inventory." />
+    
+    <!-- PWA & Mobile Capabilities -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#4f46e5" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="VRSEC Incubation" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Development Cache Purge, Diagnostic Screen & Zero-Blank Shield -->
+    <script>
+      (function() {
+        var isLocal = window.location.hostname === 'localhost' ||
+                      window.location.hostname === '127.0.0.1' ||
+                      window.location.hostname === '::1';
+
+        // 1. Immediately purge Service Workers and Cache Storage on localhost
+        if (isLocal) {
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function(regs) {
+              for (var i = 0; i < regs.length; i++) regs[i].unregister();
+            }).catch(function() {});
+          }
+          if ('caches' in window) {
+            caches.keys().then(function(keys) {
+              for (var i = 0; i < keys.length; i++) caches.delete(keys[i]);
+            }).catch(function() {});
+          }
+        }
+
+        function showDiagnosticCard(statusTitle, message, isServerOffline) {
+          var root = document.getElementById('root');
+          if (!root || (root.children && root.children.length > 0 && !root.dataset.isDiagnostic)) {
+            return; // Application is already mounted and active
+          }
+          root.dataset.isDiagnostic = 'true';
+          root.innerHTML =
+            '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f8fafc;padding:1.5rem;font-family:system-ui,-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;">' +
+              '<div style="max-width:560px;width:100%;background:#ffffff;border-radius:14px;box-shadow:0 12px 30px rgba(0,0,0,0.08);border:1px solid #e2e8f0;padding:2.25rem 2rem;text-align:center;">' +
+                '<div style="width:52px;height:52px;border-radius:50%;background:' + (isServerOffline ? '#eff6ff' : '#fee2e2') + ';color:' + (isServerOffline ? '#2563eb' : '#dc2626') + ';display:flex;align-items:center;justify-content:center;margin:0 auto 1.25rem;font-size:24px;font-weight:900;">' +
+                  (isServerOffline ? '⚡' : '!') +
+                '</div>' +
+                '<span style="display:inline-block;padding:0.25rem 0.75rem;border-radius:9999px;font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;background:' + (isServerOffline ? '#e0f2fe' : '#fee2e2') + ';color:' + (isServerOffline ? '#0369a1' : '#b91c1c') + ';margin-bottom:0.75rem;">' +
+                  (isServerOffline ? 'Development Server Notice' : 'Application Runtime Notice') +
+                '</span>' +
+                '<h2 style="color:#0f172a;font-size:1.35rem;font-weight:800;margin-bottom:0.6rem;line-height:1.3;">' + statusTitle + '</h2>' +
+                '<p style="color:#64748b;font-size:0.92rem;line-height:1.6;margin-bottom:1.5rem;">' + message + '</p>' +
+                (isServerOffline ?
+                  '<div style="background:#f1f5f9;border-radius:8px;padding:0.9rem 1rem;text-align:left;font-family:monospace;font-size:0.85rem;color:#334155;margin-bottom:1.5rem;border-left:4px solid #3b82f6;">' +
+                    '<strong>To launch website:</strong><br/>' +
+                    '1. Open terminal in project folder<br/>' +
+                    '2. Run: <span style="color:#2563eb;font-weight:bold;">start_local_system.bat</span> (or <span style="color:#2563eb;font-weight:bold;">npm run dev</span>)<br/>' +
+                    '3. Click "Check Connection & Reconnect" below' +
+                  '</div>' : '') +
+                '<div id="diagnostic-status" style="margin-bottom:1rem;font-size:0.85rem;font-weight:600;color:#64748b;min-height:1.2rem;"></div>' +
+                '<div style="display:flex;gap:0.75rem;justify-content:center;flex-wrap:wrap;">' +
+                  '<button id="btn-reconnect" style="background:#4f46e5;color:#ffffff;border:none;padding:0.7rem 1.4rem;border-radius:8px;font-weight:700;font-size:0.88rem;cursor:pointer;box-shadow:0 4px 12px rgba(79,70,229,0.3);transition:all 0.15s ease;">Check Connection & Reconnect</button>' +
+                  '<button id="btn-clear-cache" style="background:#ffffff;color:#475569;border:1px solid #cbd5e1;padding:0.7rem 1.2rem;border-radius:8px;font-weight:600;font-size:0.88rem;cursor:pointer;">Reset Cache & Reload</button>' +
+                '</div>' +
+              '</div>' +
+            '</div>';
+
+          var statusEl = document.getElementById('diagnostic-status');
+          var btnReconnect = document.getElementById('btn-reconnect');
+          var btnClearCache = document.getElementById('btn-clear-cache');
+
+          if (btnReconnect) {
+            btnReconnect.onclick = function() {
+              if (statusEl) statusEl.innerText = 'Checking server connection on port 5173...';
+              btnReconnect.disabled = true;
+              fetch(window.location.origin + '/?t=' + Date.now(), { method: 'HEAD', cache: 'no-store' })
+                .then(function() {
+                  if (statusEl) statusEl.innerText = 'Server responding! Reloading...';
+                  setTimeout(function() { window.location.reload(true); }, 300);
+                })
+                .catch(function() {
+                  btnReconnect.disabled = false;
+                  if (statusEl) statusEl.innerHTML = '<span style="color:#dc2626;">Server still offline. Please run npm run dev in your terminal.</span>';
+                });
+            };
+          }
+
+          if (btnClearCache) {
+            btnClearCache.onclick = function() {
+              try { localStorage.clear(); sessionStorage.clear(); } catch(e) {}
+              if ('caches' in window) {
+                caches.keys().then(function(keys) {
+                  return Promise.all(keys.map(function(k) { return caches.delete(k); }));
+                }).finally(function() { window.location.reload(true); });
+              } else {
+                window.location.reload(true);
+              }
+            };
+          }
+
+          // Controlled recovery ping (maximum 5 tries, NO infinite reload loops)
+          if (isServerOffline) {
+            var pingAttempts = 0;
+            var maxPings = 5;
+            var pingTimer = setInterval(function() {
+              pingAttempts++;
+              if (pingAttempts > maxPings) {
+                clearInterval(pingTimer);
+                if (statusEl) statusEl.innerText = 'Automatic check paused. Start the server and click "Check Connection".';
+                return;
+              }
+              if (statusEl) statusEl.innerText = 'Testing connection (' + pingAttempts + '/' + maxPings + ')...';
+              fetch(window.location.origin + '/?t=' + Date.now(), { method: 'HEAD', cache: 'no-store' })
+                .then(function() {
+                  clearInterval(pingTimer);
+                  if (statusEl) statusEl.innerText = 'Server detected! Loading application...';
+                  window.location.reload(true);
+                })
+                .catch(function() {
+                  // Keep waiting until max attempts
+                });
+            }, 3000);
+          }
+        }
+
+        // 2. Global capture-phase error listener (captures script load failures)
+        window.addEventListener('error', function(event) {
+          var isScriptError = event.target && (event.target.tagName === 'SCRIPT' || event.target.src);
+          if (isScriptError && isLocal) {
+            showDiagnosticCard(
+              'Local Development Server Offline',
+              'The browser could not connect to the local development server at port 5173. The server might be stopped, compiling, or blocked.',
+              true
+            );
+          }
+        }, true);
+
+        // 3. Unhandled promise rejection listener
+        window.addEventListener('unhandledrejection', function(event) {
+          var root = document.getElementById('root');
+          if (root && (!root.innerHTML || root.innerHTML.trim() === '')) {
+            showDiagnosticCard(
+              'Application Startup Interrupted',
+              'An asynchronous initialization event occurred (' + (event.reason ? (event.reason.message || event.reason) : 'Unknown') + ').',
+              false
+            );
+          }
+        });
+
+        // 4. Watchdog: If after 3.2 seconds #root is still completely blank on localhost, display diagnostic screen
+        if (isLocal) {
+          setTimeout(function() {
+            var root = document.getElementById('root');
+            if (root && (!root.innerHTML || root.innerHTML.trim() === '' || root.children.length === 0)) {
+              showDiagnosticCard(
+                'Development Server Not Responding',
+                'The local development server has not served the application bundle within 3 seconds. Please ensure Vite is running on port 5173.',
+                true
+              );
+            }
+          }, 3200);
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -23,6 +23,7 @@ import {
   revokeAuthorization,
   subscribeToDb,
 } from '../../db/database';
+import { formatDisplayDate } from '../../utils/dateFormatter';
 
 export default function Authorizations({ onOpenOcrModal, onToast }) {
   const [authorizationsList, setAuthorizationsList] = useState([]);
@@ -207,8 +208,8 @@ export default function Authorizations({ onOpenOcrModal, onToast }) {
                         )}
                       </td>
                       <td className="text-sm">
-                        <div>Until: <strong>{new Date(auth.validUntil).toLocaleDateString()}</strong></div>
-                        <div className="text-xs text-muted">Created: {new Date(auth.createdAt).toLocaleDateString()}</div>
+                        <div>Until: <strong>{formatDisplayDate(auth.validUntil)}</strong></div>
+                        <div className="text-xs text-muted">Created: {formatDisplayDate(auth.createdAt)}</div>
                       </td>
                       <td>
                         {isActive && (

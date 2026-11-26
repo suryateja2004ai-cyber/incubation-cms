@@ -16,7 +16,6 @@ import {
   X,
   WifiOff,
   Sliders,
-  Fingerprint,
   BarChart3,
   FileText,
   User,
@@ -27,6 +26,8 @@ import {
   Layers,
   Calendar,
   Award,
+  Camera,
+  HelpCircle,
 } from 'lucide-react';
 
 export default function Sidebar({
@@ -42,13 +43,91 @@ export default function Sidebar({
   lowStockCount = 0,
   centreName = 'Incubation Centre',
   onOpenBarcodeScanner,
+  onOpenHelp,
 }) {
   const isStudent = currentUser?.role === 'student';
+  const isStaff = currentUser?.role === 'staff';
   const isAdminOrSubstitute =
     currentUser?.role === 'admin' ||
     currentUser?.role === 'substitute_admin' ||
     currentUser?.role === 'sir' ||
-    !currentUser?.role;
+    (!currentUser?.role && !isStaff && !isStudent);
+
+  // Navigation Items for Staff (Restricted Desk Dashboard)
+  const staffCoreItems = [
+    {
+      id: 'dashboard',
+      label: 'Staff Desk Dashboard',
+      icon: LayoutDashboard,
+    },
+    {
+      id: 'issue',
+      label: 'Issue Components',
+      icon: ArrowUpRight,
+    },
+    {
+      id: 'return',
+      label: 'Return Components',
+      icon: ArrowDownLeft,
+    },
+    {
+      id: 'overdue',
+      label: 'Overdue Tracker',
+      icon: Clock,
+      badge: overdueCount > 0 ? overdueCount : null,
+      badgeType: 'danger',
+    },
+    {
+      id: 'components',
+      label: 'Components Inventory',
+      icon: Cpu,
+      badge: lowStockCount > 0 ? `${lowStockCount} Low` : null,
+      badgeType: 'warning',
+    },
+  ];
+
+  const staffEntranceItems = [
+    {
+      id: 'students_inside',
+      label: 'Students Inside Lab',
+      icon: Users,
+      badge: insideCount > 0 ? `${insideCount} Inside` : null,
+      badgeType: 'success',
+    },
+    {
+      id: 'face_attendance',
+      label: 'Face Recognition Attendance',
+      icon: Camera,
+    },
+    {
+      id: 'lab_entry_exit',
+      label: 'Lab Entry / Exit',
+      icon: UserCheck,
+    },
+  ];
+
+  const staffRecordItems = [
+    {
+      id: 'transactions',
+      label: 'Transactions History',
+      icon: History,
+    },
+    {
+      id: 'students',
+      label: 'Student Directory (View)',
+      icon: Users,
+    },
+    {
+      id: 'projects',
+      label: 'Projects & Teams',
+      icon: Layers,
+    },
+    {
+      id: 'complaints',
+      label: 'Complaints',
+      icon: AlertTriangle,
+    },
+  ];
 
   // Navigation Items for Admin & Substitute Admin
   const adminCoreItems = [
@@ -98,15 +177,14 @@ export default function Sidebar({
       badgeType: 'success',
     },
     {
-      id: 'lab_entry_exit',
-      label: 'Entrance Station (Biometrics)',
-      icon: Fingerprint,
+      id: 'face_attendance',
+      label: 'Face Recognition Attendance',
+      icon: Camera,
     },
     {
-      id: 'scan_id_barcode',
-      label: 'Scan Student ID (Barcode)',
-      icon: ScanLine,
-      isBarcodeScannerAction: true,
+      id: 'lab_entry_exit',
+      label: 'Lab Entry / Exit',
+      icon: UserCheck,
     },
   ];
 
@@ -210,8 +288,9 @@ export default function Sidebar({
   function handleSelect(item) {
     if (item.isBarcodeScannerAction) {
       if (onOpenBarcodeScanner) onOpenBarcodeScanner();
-    } else if (item.isMainTab) {
+    } else if (item.isMainTab || item.id === 'control') {
       if (setMainTab) setMainTab('control');
+      if (setActiveTab) setActiveTab('control');
     } else {
       if (setMainTab) setMainTab('management');
       if (setActiveTab) setActiveTab(item.id);
@@ -273,15 +352,105 @@ export default function Sidebar({
               <span className="nav-section-title">Student Portal</span>
               {studentItems.map((item) => {
                 const Icon = item.icon;
-                const isActive = item.isMainTab
-                  ? mainTab === 'control'
-                  : mainTab === 'management' &&
-                    (activeTab === item.id || (item.isStudentPortal && (!activeTab || activeTab === 'student_portal')));
+                const isActive = (item.isMainTab || item.id === 'control')
+                  ? (mainTab === 'control' || activeTab === 'control')
+                  : (mainTab === 'management' && activeTab !== 'control') &&
+                    (activeTab === item.id || (item.isStudentPortal && (!activeTab || activeTab === 'student_portal' || activeTab === 'dashboard')));
                 return (
                   <button
                     key={item.id}
                     type="button"
                     className={`nav-item ${isActive ? 'active' : ''}`}
+                    data-tour={`nav-${item.id}`}
+                    onClick={() => handleSelect(item)}
+                  >
+                    <div className="nav-item-left">
+                      <Icon size={18} />
+                      <span>{item.label}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </>
+          ) : isStaff ? (
+            /* RESTRICTED STAFF DESK NAVIGATION */
+            <>
+              <span className="nav-section-title">Staff Desk Operations</span>
+              {staffCoreItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = mainTab === 'management' && activeTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`nav-item ${isActive ? 'active' : ''}`}
+                    data-tour={`nav-${item.id}`}
+                    onClick={() => handleSelect(item)}
+                  >
+                    <div className="nav-item-left">
+                      <Icon size={18} />
+                      <span>{item.label}</span>
+                    </div>
+                    {item.badge && (
+                      <span
+                        className="nav-item-badge"
+                        style={
+                          item.badgeType === 'warning'
+                            ? { background: '#fef3c7', color: '#b45309' }
+                            : item.badgeType === 'danger'
+                            ? { background: 'var(--danger-light)', color: 'var(--danger-text)' }
+                            : {}
+                        }
+                      >
+                        {item.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+
+              <span className="nav-section-title" style={{ marginTop: '0.75rem' }}>
+                Lab Attendance & Entry
+              </span>
+              {staffEntranceItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = mainTab === 'management' && activeTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`nav-item ${isActive ? 'active' : ''}`}
+                    data-tour={`nav-${item.id}`}
+                    onClick={() => handleSelect(item)}
+                  >
+                    <div className="nav-item-left">
+                      <Icon size={18} />
+                      <span>{item.label}</span>
+                    </div>
+                    {item.badge && (
+                      <span
+                        className="nav-item-badge"
+                        style={{ background: '#d1fae5', color: '#065f46' }}
+                      >
+                        {item.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+
+              <span className="nav-section-title" style={{ marginTop: '0.75rem' }}>
+                Records & Verification
+              </span>
+              {staffRecordItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = mainTab === 'management' && activeTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`nav-item ${isActive ? 'active' : ''}`}
+                    data-tour={`nav-${item.id}`}
                     onClick={() => handleSelect(item)}
                   >
                     <div className="nav-item-left">
@@ -298,14 +467,15 @@ export default function Sidebar({
               <span className="nav-section-title">Core Operations</span>
               {adminCoreItems.map((item) => {
                 const Icon = item.icon;
-                const isActive = item.isMainTab
-                  ? mainTab === 'control'
-                  : mainTab === 'management' && activeTab === item.id;
+                const isActive = (item.isMainTab || item.id === 'control')
+                  ? (mainTab === 'control' || activeTab === 'control')
+                  : (mainTab === 'management' && activeTab !== 'control') && activeTab === item.id;
                 return (
                   <button
                     key={item.id}
                     type="button"
                     className={`nav-item ${isActive ? 'active' : ''}`}
+                    data-tour={`nav-${item.id}`}
                     onClick={() => handleSelect(item)}
                   >
                     <div className="nav-item-left">
@@ -341,6 +511,7 @@ export default function Sidebar({
                     key={item.id}
                     type="button"
                     className={`nav-item ${isActive ? 'active' : ''}`}
+                    data-tour={`nav-${item.id}`}
                     onClick={() => handleSelect(item)}
                   >
                     <div className="nav-item-left">
@@ -370,6 +541,7 @@ export default function Sidebar({
                     key={item.id}
                     type="button"
                     className={`nav-item ${isActive ? 'active' : ''}`}
+                    data-tour={`nav-${item.id}`}
                     onClick={() => handleSelect(item)}
                   >
                     <div className="nav-item-left">
@@ -391,6 +563,7 @@ export default function Sidebar({
                     key={item.id}
                     type="button"
                     className={`nav-item ${isActive ? 'active' : ''}`}
+                    data-tour={`nav-${item.id}`}
                     onClick={() => handleSelect(item)}
                   >
                     <div className="nav-item-left">
@@ -402,6 +575,31 @@ export default function Sidebar({
               })}
             </>
           )}
+
+          {/* HELP & TUTORIALS NAV ITEM (ACCESSIBLE TO ALL ROLES) */}
+          <span className="nav-section-title" style={{ marginTop: '0.85rem' }}>
+            Help & Guidance
+          </span>
+          <button
+            type="button"
+            className="nav-item"
+            data-tour="nav-help"
+            onClick={() => {
+              if (onOpenHelp) onOpenHelp();
+              setIsSidebarOpen(false);
+            }}
+            style={{
+              color: 'var(--primary)',
+              fontWeight: 700,
+              background: '#f5f3ff',
+              border: '1px solid #ddd6fe',
+            }}
+          >
+            <div className="nav-item-left">
+              <HelpCircle size={18} style={{ color: 'var(--primary)' }} />
+              <span>Help & Guided Tours</span>
+            </div>
+          </button>
         </nav>
 
         {/* User Card at bottom of sidebar */}
@@ -416,6 +614,10 @@ export default function Sidebar({
                       ? 'var(--primary)'
                       : currentUser?.role === 'substitute_admin'
                       ? '#0284c7'
+                      : currentUser?.role === 'sir'
+                      ? '#7c3aed'
+                      : currentUser?.role === 'staff'
+                      ? '#d97706'
                       : '#10b981',
                 }}
               >
@@ -439,8 +641,12 @@ export default function Sidebar({
                 <div style={{ fontSize: '0.73rem', color: 'var(--neutral-500)' }}>
                   {currentUser?.role === 'admin'
                     ? 'Super Admin'
+                    : currentUser?.role === 'sir'
+                    ? 'Lab Director / Sir'
                     : currentUser?.role === 'substitute_admin'
                     ? 'Substitute Admin'
+                    : currentUser?.role === 'staff'
+                    ? 'Lab Staff / Assistant'
                     : `Student: ${currentUser?.rollNumber || ''}`}
                 </div>
               </div>

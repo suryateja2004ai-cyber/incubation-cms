@@ -48,6 +48,10 @@ scratch/
 # Editor & OS files
 .DS_Store
 Thumbs.db
+*.pt
+*.zip
+
+CodeAlpha_PythonProgramming/
 .vscode/
 .idea/
 *.swp

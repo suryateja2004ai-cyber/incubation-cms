@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VRSEC Incubation Centre - Four-Year Cloud Storage, Infrastructure & Cost Estimation</title>
+  <style>
+    :root {
+      --primary: #1e3a8a;
+      --primary-light: #3b82f6;
+      --primary-dark: #172554;
+      --gold: #d97706;
+      --gold-light: #fbbf24;
+      --bg: #ffffff;
+      --card-bg: #f8fafc;
+      --border: #e2e8f0;
+      --text: #0f172a;
+      --text-muted: #475569;
+      --success-bg: #ecfdf5;
+      --success-text: #065f46;
+      --success-border: #a7f3d0;
+      --warn-bg: #fffbeb;
+      --warn-text: #92400e;
+      --warn-border: #fde68a;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+      color: var(--text);
+      background-color: #f1f5f9;
+      padding-bottom: 60px;
+    }
+
+    .action-bar {
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      background: var(--primary-dark);
+      color: #ffffff;
+      padding: 12px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    .action-bar h1 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .action-bar .badge {
+      background: var(--gold);
+      color: #ffffff;
+      font-size: 0.75rem;
+      padding: 2px 8px;
+      border-radius: 9999px;
+      font-weight: 700;
+    }
+    .action-buttons {
+      display: flex;
+      gap: 12px;
+    }
+    .btn {
+      cursor: pointer;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 0.85rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+      text-decoration: none;
+    }
+    .btn-gold {
+      background: var(--gold-light);
+      color: #78350f;
+    }
+    .btn-gold:hover {
+      background: #f59e0b;
+      transform: translateY(-1px);
+    }
+    .btn-outline {
+      background: rgba(255, 255, 255, 0.15);
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+    .btn-outline:hover {
+      background: rgba(255, 255, 255, 0.25);
+    }
+
+    .document-page {
+      max-width: 1050px;
+      margin: 30px auto;
+      background: #ffffff;
+      padding: 50px 60px;
+      border-radius: 8px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+      border: 1px solid var(--border);
+    }
+
+    .header-banner {
+      border-bottom: 4px solid var(--gold);
+      padding-bottom: 24px;
+      margin-bottom: 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 20px;
+    }
+    .college-name {
+      font-size: 0.85rem;
+      font-weight: 800;
+      letter-spacing: 1px;
+      color: var(--primary);
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .college-sub {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+    .doc-main-title {
+      font-size: 1.85rem;
+      color: var(--primary-dark);
+      font-weight: 800;
+      line-height: 1.25;
+      margin-bottom: 8px;
+    }
+    .doc-subtitle {
+      font-size: 1.0rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin: 28px 0;
+    }
+    .kpi-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      text-align: left;
+      border-top: 4px solid var(--primary);
+    }
+    .kpi-card.green { border-top-color: #10b981; }
+    .kpi-card.blue { border-top-color: #3b82f6; }
+    .kpi-card.purple { border-top-color: #8b5cf6; }
+    .kpi-card.gold { border-top-color: var(--gold); }
+    .kpi-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    .kpi-val {
+      font-size: 1.55rem;
+      font-weight: 800;
+      color: var(--primary-dark);
+      line-height: 1.1;
+      margin-bottom: 4px;
+    }
+    .kpi-card.green .kpi-val { color: #047857; }
+    .kpi-sub {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .meta-box {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin-bottom: 35px;
+    }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px 24px;
+      font-size: 0.85rem;
+    }
+    .meta-item strong {
+      color: var(--primary-dark);
+      margin-right: 6px;
+    }
+
+    .section {
+      margin-top: 40px;
+    }
+    .section-title {
+      font-size: 1.25rem;
+      color: var(--primary-dark);
+      border-bottom: 2px solid var(--primary-light);
+      padding-bottom: 8px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .section-num {
+      background: var(--primary);
+      color: #ffffff;
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      font-weight: 700;
+    }
+    .subsection-title {
+      font-size: 1.02rem;
+      color: var(--primary);
+      margin: 20px 0 10px 0;
+      font-weight: 700;
+    }
+
+    p {
+      margin-bottom: 12px;
+      font-size: 0.92rem;
+      color: #1e293b;
+    }
+
+    ul {
+      margin: 10px 0 16px 24px;
+      font-size: 0.9rem;
+    }
+    li {
+      margin-bottom: 6px;
+      color: #334155;
+    }
+    li strong {
+      color: var(--primary-dark);
+    }
+
+    .table-container {
+      overflow-x: auto;
+      margin: 16px 0 24px 0;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+      text-align: left;
+    }
+    th {
+      background: var(--primary-dark);
+      color: #ffffff;
+      font-weight: 700;
+      padding: 10px 12px;
+      border-right: 1px solid rgba(255, 255, 255, 0.15);
+      white-space: nowrap;
+    }
+    th:last-child { border-right: none; }
+    td {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      border-right: 1px solid var(--border);
+      vertical-align: top;
+    }
+    td:last-child { border-right: none; }
+    tr:nth-child(even) {
+      background-color: #f8fafc;
+    }
+    tr:hover {
+      background-color: #f1f5f9;
+    }
+
+    .badge-status {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 700;
+      font-size: 0.72rem;
+      text-align: center;
+      white-space: nowrap;
+    }
+    .badge-success {
+      background: #dcfce7;
+      color: #15803d;
+      border: 1px solid #86efac;
+    }
+    .badge-pending {
+      background: #fef3c7;
+      color: #b45309;
+      border: 1px solid #fde68a;
+    }
+
+    .callout {
+      border-left: 4px solid var(--primary);
+      background: #eff6ff;
+      padding: 14px 18px;
+      border-radius: 0 6px 6px 0;
+      margin: 18px 0;
+      font-size: 0.88rem;
+    }
+    .callout.success {
+      border-left-color: #10b981;
+      background: var(--success-bg);
+      color: var(--success-text);
+    }
+    .callout.warning {
+      border-left-color: var(--gold);
+      background: var(--warn-bg);
+      color: var(--warn-text);
+    }
+    .callout strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    @media print {
+      body {
+        background: #ffffff;
+        padding: 0;
+      }
+      .action-bar {
+        display: none !important;
+      }
+      .document-page {
+        margin: 0;
+        padding: 0;
+        border: none;
+        box-shadow: none;
+        max-width: 100%;
+      }
+      @page {
+        size: A4;
+        margin: 15mm;
+      }
+      .section {
+        page-break-inside: auto;
+      }
+      .kpi-card, .meta-box, tr, .callout {
+        page-break-inside: avoid;
+      }
+      th {
+        background: #1e3a8a !important;
+        color: #ffffff !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Sticky Action Bar -->
+  <div class="action-bar">
+    <h1>
+      <span>VRSEC Incubation Centre</span>
+      <span class="badge">4-Year Financial & Cloud Estimation</span>
+    </h1>
+    <div class="action-buttons">
+      <button class="btn btn-gold" onclick="window.print()">
+        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M2.5 8a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1z"/><path d="M5 1a2 2 0 0 0-2 2v2H2a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h1v1a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-1h1a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-1V3a2 2 0 0 0-2-2H5zM4 3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2H4V3zm1 5a2 2 0 0 0-2 2v1H2a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v-1a2 2 0 0 0-2-2H5zm7 2v3a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1z"/></svg>
+        Print / Save to PDF
+      </button>
+      <a href="VRSEC_Incubation_Centre_4Year_Cloud_Cost_Estimation.pdf" class="btn btn-outline" download>
+        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/><path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/></svg>
+        Direct PDF Download
+      </a>
+    </div>
+  </div>
+
+  <div class="document-page">
+    <!-- Header / Title -->
+    <div class="header-banner">
+      <div>
+        <div class="college-name">Velagapudi Ramakrishna Siddhartha Engineering College (Autonomous)</div>
+        <div class="college-sub">Accredited by NAAC A+ Grade • Department of Electronics & Communication Engineering</div>
+        <h1 class="doc-main-title">VRSEC Incubation Centre Management System</h1>
+        <div class="doc-subtitle">Four-Year Cloud Storage, Infrastructure & Financial Cost Estimation (2026–2030)</div>
+      </div>
+      <div style="text-align: right; min-width: 140px;">
+        <span class="badge-status badge-success" style="font-size: 0.85rem; padding: 4px 10px;">Planning Target: 1,400 Users</span>
+        <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 6px;">Horizon: 4 Academic Years</div>
+      </div>
+    </div>
+
+    <!-- KPI Grid -->
+    <div class="kpi-grid">
+      <div class="kpi-card green">
+        <div class="kpi-label">4-Yr Database Storage</div>
+        <div class="kpi-val">247.9 MB</div>
+        <div class="kpi-sub">6.54L rows (Fits 500 MB Free / 8 GB Pro)</div>
+      </div>
+      <div class="kpi-card blue">
+        <div class="kpi-label">4-Yr Cloudflare R2</div>
+        <div class="kpi-val">1.68 GB</div>
+        <div class="kpi-sub">100% Free (Within 10 GB free allowance)</div>
+      </div>
+      <div class="kpi-card purple">
+        <div class="kpi-label">Annual Operating Cost</div>
+        <div class="kpi-val">Rs. 30,090</div>
+        <div class="kpi-sub">$354 USD/year (with 18% GST on Pro)</div>
+      </div>
+      <div class="kpi-card gold">
+        <div class="kpi-label">Cost per Student / Year</div>
+        <div class="kpi-val">Rs. 21.49</div>
+        <div class="kpi-sub">Rs. 85.97 across entire 4-year degree</div>
+      </div>
+    </div>
+
+    <!-- Metadata Box -->
+    <div class="meta-box">
+      <div class="meta-grid">
+        <div class="meta-item"><strong>Audited Platform:</strong> VRSEC Incubation Centre Management System (React 19 / Vite)</div>
+        <div class="meta-item"><strong>Target Population:</strong> 1,400 Total Registered Members (Students, Staff, Faculty, Admin)</div>
+        <div class="meta-item"><strong>Foreign Exchange Baseline:</strong> 1 USD = 85.00 INR (Explicit baseline assumption)</div>
+        <div class="meta-item"><strong>Taxation Assumptions:</strong> 18.0% Indian GST applicable on overseas SaaS / OIDAR services</div>
+        <div class="meta-item"><strong>Database Infrastructure:</strong> Supabase PostgreSQL (24 Relational Tables, RLS Enabled)</div>
+        <div class="meta-item"><strong>Object Storage & Hosting:</strong> Cloudflare R2 (10 GB Free Tier, $0 Egress) + Cloudflare Pages (Free)</div>
+      </div>
+    </div>
+
+    <!-- Section 1 -->
+    <div class="section">
+      <h2 class="section-title"><span class="section-num">1</span> Executive Summary</h2>
+      <p>
+        A rigorous, evidence-based infrastructure and financial estimation was conducted for operating the VRSEC Incubation
+        Centre Management System across a four-year planning horizon (2026-2030) for a target population of approximately 1,400
+        registered members (students, staff, faculty, and administrators). The application is an enterprise-grade React 19 / Vite
+        single-page application engineered with an offline-first architecture, backed by Supabase PostgreSQL and Cloudflare Pages/R2.
+      </p>
+      <ul>
+        <li><strong>Database Storage:</strong> All 24 PostgreSQL tables combined will consume approximately 66.6 MB in Year 1 and 247.9 MB cumulative after four full academic years (653,730 total rows in Expected Usage). This fits comfortably within both the Supabase Free limit (500 MB, 49.6% consumed) and the Supabase Pro tier (8,192 MB, only 3.0% consumed).</li>
+        <li><strong>Cloudflare R2 Object Storage:</strong> Four-year cumulative file storage across student avatars, component shelf photos, project showcases, event photos, research papers, and rolling disaster-recovery backups is 1.68 GB (3,321 files). Because Cloudflare R2 provides a permanent 10 GB free monthly allowance with $0 data egress fees, file storage is 100% FREE ($0.00/year).</li>
+        <li><strong>Cloudflare Pages Hosting & Functions:</strong> Static SPA asset hosting, global CDN edge caching, and serverless Pages Functions execute completely within Cloudflare Pages Free Tier (unlimited bandwidth, 100,000 free function requests/day). Hosting cost is $0.00/year.</li>
+        <li><strong>Authentication MAU:</strong> Supabase Free and Pro tiers both include 50,000 Monthly Active Users (MAU). With 1,400 total registered members, peak active monthly users will never exceed 1,400 (only 2.8% of the free allowance). Auth charges are $0.00/year.</li>
+        <li><strong>Recommended Institutional Plan:</strong> Supabase Pro at $25.00/month ($300.00/year + 18% Indian GST = Rs. 30,090/year or Rs. 2,508/month). This eliminates the Supabase Free tier 7-day project inactivity pause during vacations and provides automated daily backups with a 24/7 SLA.</li>
+        <li><strong>Unit Economics:</strong> The total cost per registered student is just Rs. 21.49 / year (Rs. 85.97 for all four academic years combined, or less than $1.02 USD total).</li>
+      </ul>
+      <div class="callout success">
+        <strong>Executive Verdict: Exceptional Cost Efficiency & Zero Expensive Server Upgrades</strong>
+        The local-first architecture and Cloudflare zero-egress R2 integration allow the entire college incubation laboratory to operate
+        for four full years on a total infrastructure budget of Rs. 1,20,360 ($1,416 USD including 18% GST). No expensive server upgrades are required.
+      </div>
+    </div>
+
+    <!-- Section 2 -->
+    <div class="section">
+      <h2 class="section-title"><span class="section-num">2</span> Existing Architecture Assessment</h2>
+      <p>
+        The application architecture comprises three tightly decoupled tiers designed for high resilience, offline autonomy, and low cloud bandwidth:
+      </p>
+      <ul>
+        <li><strong>Client Layer (React 19 + Vite):</strong> Single-page application utilizing <code>memoryStore</code> for synchronous sub-millisecond in-memory state and dual-persistence (<code>localStorage</code> + <code>IndexedDB</code>). Reads are satisfied locally; only mutations and initial sync pulls hit the cloud.</li>
+        <li><strong>Storage & Sync Layer (SyncService):</strong> Implements an exponential backoff mutation queue and atomic RPC idempotency. Mutations generated offline are queued and replayed automatically upon network reconnection.</li>
+        <li><strong>Database Layer (Supabase PostgreSQL):</strong> 24 relational tables, 17 RPCs/triggers, and strict Row Level Security (RLS) policies. Migration 007 isolates student profiles and staff desks; Migration 008 standardizes the 7-category inventory taxonomy.</li>
+        <li><strong>Edge & Object Tier (Cloudflare Pages + R2):</strong> Static frontend served via Cloudflare global edge CDN. Serverless functions proxy authenticated image uploads to private Cloudflare R2 bucket (<code>CMS_BUCKET</code>).</li>
+      </ul>
+    </div>
+
+    <!-- Section 3, 4 & 5 -->
+    <div class="section">
+      <h2 class="section-title"><span class="section-num">3, 4 & 5</span> Supabase Database Storage Calculation (All 24 Tables)</h2>
+      <p>
+        Storage is calculated using measured column schemas, PostgreSQL tuple headers (23 bytes/row), null bitmaps,
+        B-Tree index leaf-node sizing, and a standard 35% PostgreSQL system overhead factor (WAL, toast, and 20% page headroom):
+      </p>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Table Name</th>
+              <th>Rows (Y1)</th>
+              <th>Rows (Y4)</th>
+              <th>Row Size</th>
+              <th>Index Size</th>
+              <th>Annual Growth</th>
+              <th>4-Year Storage</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>users</strong></td><td>1,400</td><td>1,400</td><td>450 B</td><td>160 B</td><td>0</td><td><span class="badge-status badge-success">0.82 MB</span></td></tr>
+            <tr><td><strong>student_roster</strong></td><td>1,540</td><td>1,540</td><td>220 B</td><td>64 B</td><td>0</td><td><span class="badge-status badge-success">0.42 MB</span></td></tr>
+            <tr><td><strong>components</strong></td><td>250</td><td>340</td><td>520 B</td><td>48 B</td><td>30</td><td><span class="badge-status badge-success">0.18 MB</span></td></tr>
+            <tr><td><strong>component_categories</strong></td><td>50</td><td>50</td><td>180 B</td><td>32 B</td><td>0</td><td><span class="badge-status badge-success">0.01 MB</span></td></tr>
+            <tr><td><strong>devices</strong></td><td>16</td><td>16</td><td>320 B</td><td>32 B</td><td>0</td><td><span class="badge-status badge-success">0.01 MB</span></td></tr>
+            <tr><td><strong>visits (Attendance)</strong></td><td>95,200</td><td>3,80,800</td><td>160 B</td><td>110 B</td><td>95,200</td><td><span class="badge-status badge-pending">98.05 MB</span></td></tr>
+            <tr><td><strong>transactions</strong></td><td>7,140</td><td>28,560</td><td>420 B</td><td>120 B</td><td>7,140</td><td><span class="badge-status badge-success">14.70 MB</span></td></tr>
+            <tr><td><strong>processed_rpc_operations</strong></td><td>10,710</td><td>42,840</td><td>280 B</td><td>48 B</td><td>10,710</td><td><span class="badge-status badge-success">13.41 MB</span></td></tr>
+            <tr><td><strong>authorizations</strong></td><td>179</td><td>714</td><td>240 B</td><td>64 B</td><td>179</td><td><span class="badge-status badge-success">0.21 MB</span></td></tr>
+            <tr><td><strong>domains</strong></td><td>12</td><td>12</td><td>150 B</td><td>32 B</td><td>0</td><td><span class="badge-status badge-success">0.01 MB</span></td></tr>
+            <tr><td><strong>projects</strong></td><td>179</td><td>714</td><td>850 B</td><td>64 B</td><td>179</td><td><span class="badge-status badge-success">0.62 MB</span></td></tr>
+            <tr><td><strong>teams</strong></td><td>179</td><td>714</td><td>260 B</td><td>32 B</td><td>179</td><td><span class="badge-status badge-success">0.20 MB</span></td></tr>
+            <tr><td><strong>achievements</strong></td><td>40</td><td>160</td><td>260 B</td><td>40 B</td><td>40</td><td><span class="badge-status badge-success">0.05 MB</span></td></tr>
+            <tr><td><strong>announcements</strong></td><td>30</td><td>120</td><td>320 B</td><td>40 B</td><td>30</td><td><span class="badge-status badge-success">0.04 MB</span></td></tr>
+            <tr><td><strong>events</strong></td><td>15</td><td>60</td><td>450 B</td><td>40 B</td><td>15</td><td><span class="badge-status badge-success">0.03 MB</span></td></tr>
+            <tr><td><strong>complaints</strong></td><td>120</td><td>480</td><td>320 B</td><td>64 B</td><td>120</td><td><span class="badge-status badge-success">0.18 MB</span></td></tr>
+            <tr><td><strong>research_papers</strong></td><td>60</td><td>240</td><td>480 B</td><td>64 B</td><td>60</td><td><span class="badge-status badge-success">0.12 MB</span></td></tr>
+            <tr><td><strong>self_reflections</strong></td><td>1,785</td><td>7,140</td><td>350 B</td><td>40 B</td><td>1,785</td><td><span class="badge-status badge-success">2.65 MB</span></td></tr>
+            <tr><td><strong>holidays</strong></td><td>75</td><td>300</td><td>160 B</td><td>40 B</td><td>75</td><td><span class="badge-status badge-success">0.06 MB</span></td></tr>
+            <tr><td><strong>staff_presence</strong></td><td>30,800</td><td>1,23,200</td><td>180 B</td><td>40 B</td><td>30,800</td><td><span class="badge-status badge-success">25.84 MB</span></td></tr>
+            <tr><td><strong>settings</strong></td><td>10</td><td>10</td><td>400 B</td><td>32 B</td><td>0</td><td><span class="badge-status badge-success">0.01 MB</span></td></tr>
+            <tr><td><strong>audit_logs</strong></td><td>14,780</td><td>59,120</td><td>340 B</td><td>64 B</td><td>14,780</td><td><span class="badge-status badge-success">22.80 MB</span></td></tr>
+            <tr><td><strong>used_kiosk_nonces</strong></td><td>5,000</td><td>5,000</td><td>110 B</td><td>32 B</td><td>0 (Rolling)</td><td><span class="badge-status badge-success">0.68 MB</span></td></tr>
+            <tr><td><strong>api_rate_limits</strong></td><td>200</td><td>200</td><td>90 B</td><td>32 B</td><td>0 (Rolling)</td><td><span class="badge-status badge-success">0.02 MB</span></td></tr>
+            <tr><td><strong>Postgres System Overhead (35%)</strong></td><td>--</td><td>--</td><td>--</td><td>--</td><td>--</td><td><span class="badge-status badge-pending">63.35 MB</span></td></tr>
+            <tr><td><strong>Supabase Auth Schema (1.4K users)</strong></td><td>1,400</td><td>1,400</td><td>2.5 KB</td><td>Included</td><td>0</td><td><span class="badge-status badge-success">3.34 MB</span></td></tr>
+            <tr style="background: #f1f5f9; font-weight: 800;">
+              <td><strong>TOTAL DATABASE STORAGE</strong></td><td><strong>1,69,770</strong></td><td><strong>6,53,730</strong></td><td>--</td><td>--</td><td><strong>1,61,320</strong></td><td style="color: #047857;"><strong>247.88 MB</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Section 7 -->
+    <div class="section">
+      <h2 class="section-title"><span class="section-num">7</span> Cloudflare R2 Object Storage Calculation</h2>
+      <p>
+        The application stores binary assets in Cloudflare R2 via <code>functions/api/upload.js</code>. Large video files are strictly hosted externally
+        (YouTube, Google Drive, GitHub releases), keeping R2 storage lean and economical:
+      </p>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>File Category</th>
+              <th>Avg Size</th>
+              <th>Files (Y1)</th>
+              <th>Files (Y4)</th>
+              <th>4-Yr Storage</th>
+              <th>Upload Limits & Architecture</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>Student Profile Avatars</strong></td><td>40 KB</td><td>840</td><td>1,400</td><td>0.053 GB</td><td>Canvas compressed to &le; 50 KB WebP/JPEG</td></tr>
+            <tr><td><strong>Component Shelf Photos</strong></td><td>350 KB</td><td>250</td><td>325</td><td>0.106 GB</td><td>Compressed to &le; 1 MB (1200px max dim)</td></tr>
+            <tr><td><strong>Project Showcases</strong></td><td>450 KB</td><td>200</td><td>800</td><td>0.335 GB</td><td>Strict limit of 4 photos per project team</td></tr>
+            <tr><td><strong>Events & Achievements</strong></td><td>500 KB</td><td>135</td><td>540</td><td>0.251 GB</td><td>Max 3 photos per hackathon/workshop</td></tr>
+            <tr><td><strong>Research Publications</strong></td><td>1.5 MB</td><td>21</td><td>84</td><td>0.120 GB</td><td>Internal whitepapers; DOI/IEEE links used for external</td></tr>
+            <tr><td><strong>Complaint Attachments</strong></td><td>300 KB</td><td>30</td><td>120</td><td>0.034 GB</td><td>Optional photo of damaged equipment</td></tr>
+            <tr><td><strong>Disaster Recovery Backups</strong></td><td>10.0 MB</td><td>52</td><td>52 (Rolling)</td><td>0.762 GB</td><td>Weekly encrypted JSON/SQL database dumps</td></tr>
+            <tr style="background: #f1f5f9; font-weight: 800;">
+              <td><strong>TOTAL R2 OBJECT STORAGE</strong></td><td>--</td><td><strong>1,528</strong></td><td><strong>3,321</strong></td><td style="color: #047857;"><strong>1.682 GB</strong></td><td><strong>Free Allowance: 10.0 GB (16.8% consumed)</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <ul>
+        <li><strong>Class A Operations (Writes/Uploads/Lists):</strong> ~750 uploads/year + 2,500 list/mutation calls = ~3,250 ops/month. Free allowance is 1,000,000 ops/month (0.33% used). Overage cost is $0.00.</li>
+        <li><strong>Class B Operations (Reads/Views):</strong> ~45,000 image/document views/month. Free allowance is 10,000,000 ops/month (0.45% used). Overage cost is $0.00.</li>
+        <li><strong>Egress Bandwidth:</strong> Cloudflare R2 has ZERO data egress fees globally. Bandwidth cost is $0.00.</li>
+      </ul>
+    </div>
+
+    <!-- Section 14, 15 & 16 -->
+    <div class="section">
+      <h2 class="section-title"><span class="section-num">14, 15 & 16</span> Itemized Four-Year Financial Calculations</h2>
+      <p>Financial model for the primary planning target (Scenario B - 1,400 Members, Supabase Pro + Cloudflare Free, 1 USD = 85.00 INR):</p>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Expense Item</th>
+              <th>Year 1</th>
+              <th>Year 2</th>
+              <th>Year 3</th>
+              <th>Year 4</th>
+              <th>4-Yr Total (USD)</th>
+              <th>4-Yr Total (INR)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>Supabase Pro Base ($25/mo)</strong></td><td>$300.00</td><td>$300.00</td><td>$300.00</td><td>$300.00</td><td>$1,200.00</td><td>Rs. 1,02,000</td></tr>
+            <tr><td><strong>Supabase Extra DB Storage</strong></td><td>$0.00</td><td>$0.00</td><td>$0.00</td><td>$0.00</td><td>$0.00</td><td>Rs. 0</td></tr>
+            <tr><td><strong>Supabase Extra Egress</strong></td><td>$0.00</td><td>$0.00</td><td>$0.00</td><td>$0.00</td><td>$0.00</td><td>Rs. 0</td></tr>
+            <tr><td><strong>Cloudflare Pages Hosting</strong></td><td>$0.00</td><td>$0.00</td><td>$0.00</td><td>$0.00</td><td>$0.00</td><td>Rs. 0</td></tr>
+            <tr><td><strong>Cloudflare R2 Storage</strong></td><td>$0.00</td><td>$0.00</td><td>$0.00</td><td>$0.00</td><td>$0.00</td><td>Rs. 0</td></tr>
+            <tr><td><strong>Cloudflare R2 Operations</strong></td><td>$0.00</td><td>$0.00</td><td>$0.00</td><td>$0.00</td><td>$0.00</td><td>Rs. 0</td></tr>
+            <tr><td><strong>Pages Functions API</strong></td><td>$0.00</td><td>$0.00</td><td>$0.00</td><td>$0.00</td><td>$0.00</td><td>Rs. 0</td></tr>
+            <tr><td><strong>Domain (College Subdomain)</strong></td><td>$0.00</td><td>$0.00</td><td>$0.00</td><td>$0.00</td><td>$0.00</td><td>Rs. 0</td></tr>
+            <tr><td><strong>Automated Backups (Included)</strong></td><td>$0.00</td><td>$0.00</td><td>$0.00</td><td>$0.00</td><td>$0.00</td><td>Rs. 0</td></tr>
+            <tr style="background: #f8fafc; font-weight: 700;">
+              <td><strong>Subtotal (Before Tax)</strong></td><td>$300.00</td><td>$300.00</td><td>$300.00</td><td>$300.00</td><td>$1,200.00</td><td>Rs. 1,02,000</td></tr>
+            <tr><td><strong>Indian GST (18% on OIDAR)</strong></td><td>$54.00</td><td>$54.00</td><td>$54.00</td><td>$54.00</td><td>$216.00</td><td>Rs. 18,360</td></tr>
+            <tr style="background: #ecfdf5; font-weight: 800;">
+              <td><strong>TOTAL ANNUAL OPERATING COST</strong></td><td><strong>$354.00</strong></td><td><strong>$354.00</strong></td><td><strong>$354.00</strong></td><td><strong>$354.00</strong></td><td><strong>$1,416.00</strong></td><td style="color: #047857; font-size: 1.05rem;"><strong>Rs. 1,20,360</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout warning">
+        <strong>Why Supabase Pro ($25/mo) is Recommended Over the Free Tier:</strong>
+        Although the database size (247.9 MB) technically fits within the Supabase Free tier (500 MB limit), the Free tier automatically pauses projects after 7 days of inactivity. During semester breaks and holidays, an unannounced project pause would break login and attendance when college reopens. Supabase Pro provides guaranteed 24/7 uptime, 8 GB DB disk, 100 GB file storage, and 7-day automated rolling daily backups.
+      </div>
+    </div>
+
+    <!-- Mandatory Projection Tables -->
+    <div class="section">
+      <h2 class="section-title"><span class="section-num">M</span> Mandatory Projection Tables (A, B, C, D)</h2>
+      
+      <h3 class="subsection-title">A. Four-Year Storage Projection</h3>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Storage Type / Component</th>
+              <th>Year 1</th>
+              <th>Year 2</th>
+              <th>Year 3</th>
+              <th>Year 4</th>
+              <th>4-Yr Total Storage</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>Supabase Database (24 Tables)</strong></td><td>66.63 MB</td><td>127.05 MB</td><td>187.46 MB</td><td>247.88 MB</td><td><span class="badge-status badge-success">247.88 MB (Disk)</span></td></tr>
+            <tr><td><strong>Supabase Auth Schema (1.4K users)</strong></td><td>3.34 MB</td><td>3.34 MB</td><td>3.34 MB</td><td>3.34 MB</td><td><span class="badge-status badge-success">3.34 MB</span></td></tr>
+            <tr><td><strong>Cloudflare R2 (User Files)</strong></td><td>0.310 GB</td><td>0.513 GB</td><td>0.717 GB</td><td>0.920 GB</td><td><span class="badge-status badge-success">0.920 GB</span></td></tr>
+            <tr><td><strong>Cloudflare R2 (Disaster Backups)</strong></td><td>0.381 GB</td><td>0.508 GB</td><td>0.635 GB</td><td>0.762 GB</td><td><span class="badge-status badge-success">0.762 GB (Rolling)</span></td></tr>
+            <tr><td><strong>TOTAL R2 OBJECT STORAGE</strong></td><td>0.691 GB</td><td>1.021 GB</td><td>1.352 GB</td><td>1.682 GB</td><td><span class="badge-status badge-success">1.682 GB (16.8% Free)</span></td></tr>
+            <tr style="background: #f1f5f9; font-weight: 800;">
+              <td><strong>TOTAL SYSTEM STORAGE</strong></td><td>0.761 GB</td><td>1.151 GB</td><td>1.543 GB</td><td>1.933 GB</td><td style="color: #047857;"><strong>1.933 GB Combined</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="subsection-title">B. Four-Year User Growth Projection</h3>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>User Category / Role</th>
+              <th>Year 1 (Initial)</th>
+              <th>Year 2</th>
+              <th>Year 3</th>
+              <th>Year 4 (Target)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>Enrolled Student Scholars</strong></td><td>750</td><td>950</td><td>1,100</td><td>1,190</td></tr>
+            <tr><td><strong>Laboratory Staff Assistants</strong></td><td>25</td><td>30</td><td>38</td><td>42</td></tr>
+            <tr><td><strong>Faculty Mentors & "Sir" Roles</strong></td><td>12</td><td>15</td><td>18</td><td>21</td></tr>
+            <tr><td><strong>Administrators & Substitutes</strong></td><td>5</td><td>6</td><td>7</td><td>7</td></tr>
+            <tr><td><strong>Graduated Alumni Records (Retained)</strong></td><td>50</td><td>80</td><td>110</td><td>140</td></tr>
+            <tr style="background: #f1f5f9; font-weight: 800;">
+              <td><strong>TOTAL REGISTERED MEMBERS</strong></td><td><strong>842</strong></td><td><strong>1,081</strong></td><td><strong>1,273</strong></td><td style="color: #1e3a8a;"><strong>1,400</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="subsection-title">C. Cloud Cost Projection (Service & Plan Breakdown)</h3>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Service / Platform</th>
+              <th>Selected Plan</th>
+              <th>Year 1</th>
+              <th>Year 2</th>
+              <th>Year 3</th>
+              <th>Year 4</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>Supabase Database</strong></td><td>Pro Plan ($25/mo)</td><td>$300.00</td><td>$300.00</td><td>$300.00</td><td>$300.00</td></tr>
+            <tr><td><strong>Cloudflare Pages</strong></td><td>Free Tier</td><td>$0.00</td><td>$0.00</td><td>$0.00</td><td>$0.00</td></tr>
+            <tr><td><strong>Cloudflare R2 Storage</strong></td><td>Free Allowance (10 GB)</td><td>$0.00</td><td>$0.00</td><td>$0.00</td><td>$0.00</td></tr>
+            <tr><td><strong>Cloudflare R2 Operations</strong></td><td>Free (1M Class A/10M B)</td><td>$0.00</td><td>$0.00</td><td>$0.00</td><td>$0.00</td></tr>
+            <tr><td><strong>Pages Functions API</strong></td><td>Free (100K req/day)</td><td>$0.00</td><td>$0.00</td><td>$0.00</td><td>$0.00</td></tr>
+            <tr><td><strong>College Subdomain</strong></td><td>Institutional DNS</td><td>$0.00</td><td>$0.00</td><td>$0.00</td><td>$0.00</td></tr>
+            <tr><td><strong>Taxes (18% Indian GST)</strong></td><td>OIDAR SaaS Tax</td><td>$54.00</td><td>$54.00</td><td>$54.00</td><td>$54.00</td></tr>
+            <tr style="background: #f1f5f9; font-weight: 700;">
+              <td><strong>ANNUAL COST (USD)</strong></td><td>--</td><td>$354.00</td><td>$354.00</td><td>$354.00</td><td>$354.00</td></tr>
+            <tr style="background: #ecfdf5; font-weight: 800;">
+              <td><strong>ANNUAL COST (INR @ Rs.85)</strong></td><td>--</td><td><strong>Rs. 30,090</strong></td><td><strong>Rs. 30,090</strong></td><td><strong>Rs. 30,090</strong></td><td style="color: #047857;"><strong>Rs. 30,090</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="subsection-title">D. Scenario Comparison</h3>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Scenario Model</th>
+              <th>Annual Cost (INR)</th>
+              <th>4-Yr Cost (INR)</th>
+              <th>Storage Required</th>
+              <th>Recommended Plan</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>Scenario A (Low / 1,000)</strong></td><td>Rs. 0 / Rs. 30,090</td><td>Rs. 0 / Rs. 1,20,360</td><td>106 MB DB / 1.0 GB R2</td><td>Free Tier / Pro</td></tr>
+            <tr><td><strong>Scenario B (Expected / 1,400)</strong></td><td>Rs. 30,090</td><td>Rs. 1,20,360</td><td>248 MB DB / 1.7 GB R2</td><td>Supabase Pro ($25/mo)</td></tr>
+            <tr><td><strong>Scenario C (High / 1,800)</strong></td><td>Rs. 30,090</td><td>Rs. 1,20,360</td><td>533 MB DB / 3.8 GB R2</td><td>Supabase Pro ($25/mo)</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div style="margin-top: 50px; padding-top: 20px; border-top: 1px solid var(--border); font-size: 0.78rem; color: var(--text-muted); display: flex; justify-content: space-between;">
+      <div>VRSEC Incubation Centre & Centre of Excellence • Dept. of ECE</div>
+      <div>Official Cloud Infrastructure & Financial Report • November 2026</div>
+    </div>
+  </div>
+
+</body>
+</html>
