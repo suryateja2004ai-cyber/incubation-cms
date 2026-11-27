@@ -14,15 +14,13 @@ export default async function handler(req, res) {
     const { neon } = await import('@neondatabase/serverless');
     const sql = neon(dbUrl);
 
-    // Auto-create table if not exists
     await sql`
       CREATE TABLE IF NOT EXISTS public.student_face_embeddings (
-        id VARCHAR(100) PRIMARY KEY,
-        roll_number VARCHAR(50) NOT NULL,
-        student_name VARCHAR(150),
-        embedding_vector JSONB NOT NULL,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        id text PRIMARY KEY,
+        roll_number text NOT NULL,
+        student_name text NOT NULL,
+        embedding_vector jsonb NOT NULL,
+        created_at timestamptz DEFAULT now()
       );
     `;
 
@@ -50,19 +48,17 @@ export default async function handler(req, res) {
       const vectorData = JSON.stringify(embedding_vector || []);
 
       await sql`
-        INSERT INTO public.student_face_embeddings (id, roll_number, student_name, embedding_vector, created_at, updated_at)
+        INSERT INTO public.student_face_embeddings (id, roll_number, student_name, embedding_vector, created_at)
         VALUES (
           ${recordId},
           ${cleanRoll},
           ${student_name || cleanRoll},
           ${vectorData}::jsonb,
-          NOW(),
           NOW()
         )
         ON CONFLICT (id) DO UPDATE SET
           student_name = EXCLUDED.student_name,
-          embedding_vector = EXCLUDED.embedding_vector,
-          updated_at = NOW();
+          embedding_vector = EXCLUDED.embedding_vector;
       `;
       return res.status(200).json({ success: true, message: 'Embedding saved' });
     }

@@ -23,9 +23,13 @@ export default async function handler(req, res) {
 
     if (req.method === 'GET') {
       const rows = await sql`
-        SELECT roll_number, student_name, created_at
-        FROM public.student_face_embeddings 
-        WHERE UPPER(TRIM(roll_number)) = ${cleanRoll} 
+        SELECT 
+          f.roll_number, 
+          COALESCE(p.student_name, f.student_name) as student_name, 
+          f.created_at
+        FROM public.student_face_embeddings f
+        LEFT JOIN public.passwords p ON UPPER(TRIM(p.roll_number)) = UPPER(TRIM(f.roll_number))
+        WHERE UPPER(TRIM(f.roll_number)) = ${cleanRoll} 
         LIMIT 1;
       `;
       const isRegistered = rows && rows.length > 0;

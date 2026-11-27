@@ -412,8 +412,9 @@ export default function FaceAttendance({ currentUser, onToast, onOpenBarcodeScan
     if (!primaryUser && primary?.roll_number && primary?.name && primary?.is_known) {
       primaryUser = registerBiometricUserIfMissing(primary.roll_number, primary.name);
     }
-    if (!primaryUser && primary?.roll_number?.toUpperCase() === '238W1A0477') {
-      primaryUser = { name: 'Surya Teja', rollNumber: '238W1A0477', role: 'student', department: 'Electronics & Communication Engineering' };
+    if (!primaryUser && primary?.roll_number) {
+      const u = getAllUsers().find((usr) => (usr.rollNumber || usr.username)?.toUpperCase() === primary.roll_number.toUpperCase());
+      if (u) primaryUser = u;
     }
     const isPrimaryVerified = primary?.is_known && !!primaryUser;
 
@@ -441,8 +442,9 @@ export default function FaceAttendance({ currentUser, onToast, onOpenBarcodeScan
       if (!authoritativeUser && face.roll_number && face.name && face.is_known) {
         authoritativeUser = registerBiometricUserIfMissing(face.roll_number, face.name);
       }
-      if (!authoritativeUser && face.roll_number?.toUpperCase() === '238W1A0477') {
-        authoritativeUser = { name: 'Surya Teja', rollNumber: '238W1A0477', role: 'student', department: 'Electronics & Communication Engineering' };
+      if (!authoritativeUser && face.roll_number) {
+        const u = getAllUsers().find((usr) => (usr.rollNumber || usr.username)?.toUpperCase() === face.roll_number.toUpperCase());
+        if (u) authoritativeUser = u;
       }
       const isKnown = face.is_known && !!authoritativeUser;
       const isUnlinkedCandidate = face.is_known && !authoritativeUser;
@@ -604,8 +606,9 @@ export default function FaceAttendance({ currentUser, onToast, onOpenBarcodeScan
       if (!authoritativeUser && primary.name) {
         authoritativeUser = registerBiometricUserIfMissing(rollNumber, primary.name);
       }
-      if (!authoritativeUser && rollNumber === '238W1A0477') {
-        authoritativeUser = { name: 'Surya Teja', rollNumber: '238W1A0477', role: 'student', department: 'Electronics & Communication Engineering' };
+      if (!authoritativeUser) {
+        const u = getAllUsers().find((usr) => (usr.rollNumber || usr.username)?.toUpperCase() === rollNumber);
+        if (u) authoritativeUser = u;
       }
 
       // Enforce strict CMS account validation: unlinked faces must NEVER trigger attendance or display another name

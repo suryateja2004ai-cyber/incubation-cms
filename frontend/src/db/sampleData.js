@@ -44,10 +44,10 @@ export const INITIAL_USERS = [
   {
     id: 'USER-003',
     rollNumber: '238W1A0477',
-    name: 'Surya Teja',
+    name: 'Harsha Vardhan',
     role: 'student',
-    mobileNumber: '+91 98765 01001',
-    passwordHash: 'student123',
+    mobileNumber: '+91 98765 43210',
+    passwordHash: '000000',
     department: 'Electronics & Communication Engineering',
     fingerprintIds: [10, 11, 12],
     fingerLabels: ['Right Thumb', 'Right Index', 'Left Index'],

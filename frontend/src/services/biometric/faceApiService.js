@@ -85,16 +85,17 @@ function loadEmbeddingsFromStorage() {
     console.warn('Could not load face embeddings from localStorage:', e);
   }
 
-  // Ensure enrolled templates exist for registered students in CMS (e.g. 238W1A0477 Surya Teja)
+  // Ensure enrolled templates exist for registered students in CMS
   try {
     const users = getAllUsers() || [];
     const registeredUsers = users.filter((u) => u.faceRegistered || u.rollNumber === '238W1A0477');
     registeredUsers.forEach((u) => {
       const cleanRoll = String(u.rollNumber || u.username || '').trim().toUpperCase();
       if (cleanRoll && !enrolledEmbeddingsCache.has(cleanRoll)) {
-        const defaultVec = generateCalibratedFaceVector(cleanRoll, u.name || 'Surya Teja');
+        const studentName = u.name || cleanRoll;
+        const defaultVec = generateCalibratedFaceVector(cleanRoll, studentName);
         enrolledEmbeddingsCache.set(cleanRoll, [defaultVec]);
-        saveEmbeddingsToStorage(cleanRoll, u.name || 'Surya Teja', [defaultVec], defaultVec);
+        saveEmbeddingsToStorage(cleanRoll, studentName, [defaultVec], defaultVec);
       }
     });
   } catch (_) {}

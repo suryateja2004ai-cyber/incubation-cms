@@ -17,13 +17,14 @@ export default async function handler(req, res) {
     if (req.method === 'GET') {
       const rows = await sql`
         SELECT 
-          roll_number, 
-          student_name as name, 
+          f.roll_number, 
+          COALESCE(p.student_name, f.student_name) as name, 
           10 as templates_count,
           10 as embedding_count,
-          created_at
-        FROM public.student_face_embeddings 
-        ORDER BY created_at DESC;
+          f.created_at
+        FROM public.student_face_embeddings f
+        LEFT JOIN public.passwords p ON UPPER(TRIM(p.roll_number)) = UPPER(TRIM(f.roll_number))
+        ORDER BY f.created_at DESC;
       `;
       return res.status(200).json({ success: true, students: rows || [] });
     }
@@ -35,7 +36,7 @@ export default async function handler(req, res) {
       }
       await sql`
         DELETE FROM public.student_face_embeddings 
-        WHERE roll_number = ${roll};
+        WHERE UPPER(TRIM(roll_number)) = ${roll};
       `;
       return res.status(200).json({ success: true, message: `Face biometrics deleted for ${roll}` });
     }
