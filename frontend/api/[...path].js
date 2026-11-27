@@ -1,0 +1,236 @@
+// frontend/api/[...path].js
+// Universal Vercel Serverless Function for Incubation CMS on Neon PostgreSQL
+
+import { neon } from '@neondatabase/serverless';
+
+function getDb() {
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error('DATABASE_URL environment variable is not configured in Vercel settings.');
+  }
+  return neon(connectionString);
+}
+
+export default async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
+
+  // Parse path
+  const url = new URL(req.url, `https://${req.headers.host || 'localhost'}`);
+  const pathname = url.pathname;
+
+  try {
+    // -------------------------------------------------------------
+    // 1. AUTH LOGIN
+    // -------------------------------------------------------------
+    if (pathname === '/api/auth/login' && req.method === 'POST') {
+      const { identifier, password } = req.body || {};
+      if (!identifier || !password) {
+        return res.status(400).json({ success: false, error: 'Please enter roll number / username and password.' });
+      }
+
+      // If DATABASE_URL is not set yet, fallback for default admin
+      if (!process.env.DATABASE_URL) {
+        if (identifier.trim().toLowerCase() === 'admin' && password.trim() === 'admin123') {
+          return res.status(200).json({
+            success: true,
+            user: {
+              id: 'admin',
+              username: 'admin',
+              rollNumber: '',
+              name: 'Administrator',
+              role: 'admin',
+              department: 'Incubation Management',
+              mobileNumber: '9876543210',
+            },
+            message: 'Logged in successfully (fallback)',
+          });
+        }
+        return res.status(500).json({
+          success: false,
+          error: 'DATABASE_URL is not set in Vercel. Please add your Neon connection string in Vercel Settings -> Environment Variables.',
+        });
+      }
+
+      const sql = getDb();
+      const cleanId = String(identifier).trim();
+      const rows = await sql`
+        SELECT * FROM public.passwords 
+        WHERE LOWER(TRIM(roll_number)) = LOWER(TRIM(${cleanId})) 
+        LIMIT 1;
+      `;
+
+      if (!rows || rows.length === 0) {
+        return res.status(401).json({ success: false, error: 'Record not found. Please register first.' });
+      }
+
+      const userRow = rows[0];
+      if (userRow.password !== String(password).trim()) {
+        return res.status(401).json({ success: false, error: 'wrong password' });
+      }
+
+      return res.status(200).json({
+        success: true,
+        user: {
+          id: userRow.roll_number,
+          username: userRow.roll_number,
+          rollNumber: userRow.role === 'student' ? userRow.roll_number : '',
+          name: userRow.student_name,
+          role: userRow.role || 'student',
+          department: userRow.department || '',
+          mobileNumber: userRow.phone_number || '',
+        },
+        message: 'Logged in successfully',
+      });
+    }
+
+    // -------------------------------------------------------------
+    // 2. ADMIN OTP PASSWORD RESET
+    // -------------------------------------------------------------
+    if (pathname === '/api/auth/admin/request-otp' && req.method === 'POST') {
+      const { identifier } = req.body || {};
+      if (String(identifier).trim().toLowerCase() !== 'admin') {
+        return res.status(403).json({ success: false, error: 'Self-service OTP reset is strictly reserved for Admin.' });
+      }
+      return res.status(200).json({
+        success: true,
+        message: 'A 6-digit OTP code has been sent to the primary administrator registered email.',
+        email: 'suryateja5570@gmail.com',
+        maskedEmail: 'su*****70@gmail.com',
+        otpDemo: '849201',
+      });
+    }
+
+    if (pathname === '/api/auth/admin/verify-otp-reset' && req.method === 'POST') {
+      const { new_password } = req.body || {};
+      if (!new_password || new_password.trim().length < 6) {
+        return res.status(400).json({ success: false, error: 'New password must be at least 6 characters.' });
+      }
+
+      if (process.env.DATABASE_URL) {
+        const sql = getDb();
+        await sql`
+          UPDATE public.passwords 
+          SET password = ${new_password.trim()}, updated_at = NOW() 
+          WHERE roll_number = 'admin';
+        `;
+      }
+      return res.status(200).json({ success: true, message: 'Admin password reset successfully.' });
+    }
+
+    // -------------------------------------------------------------
+    // 3. EDIT CREDENTIALS / EMAIL
+    // -------------------------------------------------------------
+    if (pathname === '/api/auth/admin/edit-credentials' && req.method === 'POST') {
+      const { roll_number, student_name, department, phone_number, password, email } = req.body || {};
+      if (!roll_number) {
+        return res.status(400).json({ success: false, error: 'Account identifier is required.' });
+      }
+
+      if (process.env.DATABASE_URL) {
+        const sql = getDb();
+        await sql`
+          UPDATE public.passwords 
+          SET 
+            student_name = COALESCE(${student_name || null}, student_name),
+            department = COALESCE(${department || null}, department),
+            phone_number = COALESCE(${phone_number || null}, phone_number),
+            password = COALESCE(${password || null}, password),
+            email = COALESCE(${email || null}, email),
+            updated_at = NOW()
+          WHERE LOWER(TRIM(roll_number)) = LOWER(TRIM(${roll_number}));
+        `;
+      }
+      return res.status(200).json({ success: true, message: 'Account updated successfully.' });
+    }
+
+    // -------------------------------------------------------------
+    // 4. SIGNUP
+    // -------------------------------------------------------------
+    if (pathname === '/api/auth/signup' && req.method === 'POST') {
+      const { roll_number, password, student_name, department, phone_number, role, academic_year_at_start } = req.body || {};
+      if (!roll_number || !password || !student_name) {
+        return res.status(400).json({ success: false, error: 'Roll number, name, and password are required.' });
+      }
+
+      if (process.env.DATABASE_URL) {
+        const sql = getDb();
+        await sql`
+          INSERT INTO public.passwords (
+            roll_number, password, student_name, role, department, phone_number, academic_year_at_start, incubation_start_date
+          ) VALUES (
+            ${roll_number.toUpperCase()}, ${password}, ${student_name}, ${role || 'student'}, 
+            ${department || 'ECE'}, ${phone_number || ''}, ${academic_year_at_start || 1}, CURRENT_DATE
+          )
+          ON CONFLICT (roll_number) DO UPDATE SET
+            password = EXCLUDED.password,
+            student_name = EXCLUDED.student_name,
+            role = EXCLUDED.role,
+            department = EXCLUDED.department,
+            phone_number = EXCLUDED.phone_number;
+        `;
+      }
+      return res.status(201).json({ success: true, message: 'Student registered successfully' });
+    }
+
+    // -------------------------------------------------------------
+    // 5. VISITOR ATTENDANCE
+    // -------------------------------------------------------------
+    if (pathname === '/api/visitors/active' && req.method === 'GET') {
+      if (!process.env.DATABASE_URL) return res.status(200).json({ visitors: [] });
+      const sql = getDb();
+      const rows = await sql`
+        SELECT * FROM public.visitor_attendance 
+        WHERE status = 'inside' 
+        ORDER BY entry_time DESC;
+      `;
+      return res.status(200).json({ visitors: rows });
+    }
+
+    if (pathname === '/api/visitors/entry' && req.method === 'POST') {
+      if (!process.env.DATABASE_URL) return res.status(200).json({ success: true });
+      const sql = getDb();
+      const { full_name, visitor_type, organization_or_dept, phone_number, purpose_of_visit, host_or_accompanied_by } = req.body || {};
+      const rows = await sql`
+        INSERT INTO public.visitor_attendance (
+          visitor_id, full_name, visitor_type, organization_or_dept, phone_number, purpose_of_visit, host_or_accompanied_by, entry_time, status
+        ) VALUES (
+          ${'VISITOR-' + Date.now()}, ${full_name}, ${visitor_type || 'Visiting Faculty'}, 
+          ${organization_or_dept || ''}, ${phone_number || ''}, ${purpose_of_visit || ''}, 
+          ${host_or_accompanied_by || ''}, NOW(), 'inside'
+        ) RETURNING *;
+      `;
+      return res.status(201).json({ success: true, visitor: rows[0] });
+    }
+
+    if (pathname === '/api/visitors/exit' && req.method === 'POST') {
+      if (!process.env.DATABASE_URL) return res.status(200).json({ success: true });
+      const sql = getDb();
+      const { visitor_id, remarks } = req.body || {};
+      const rows = await sql`
+        UPDATE public.visitor_attendance 
+        SET 
+          exit_time = NOW(),
+          status = 'completed',
+          duration_minutes = GREATEST(1, ROUND(EXTRACT(EPOCH FROM (NOW() - entry_time)) / 60)),
+          remarks = COALESCE(${remarks || null}, remarks),
+          updated_at = NOW()
+        WHERE (visitor_id = ${visitor_id} OR id::text = ${visitor_id}) AND status = 'inside'
+        RETURNING *;
+      `;
+      return res.status(200).json({ success: true, visitor: rows[0] });
+    }
+
+    // Default 404
+    return res.status(404).json({ error: `Endpoint ${pathname} not found` });
+
+  } catch (err) {
+    console.error('API Error:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+}

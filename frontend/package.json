@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@ericblade/quagga2": "^1.12.1",
+    "@neondatabase/serverless": "^1.2.1",
     "@supabase/supabase-js": "^2.116.0",
     "@undecaf/barcode-detector-polyfill": "^0.9.23",
     "barcode-detector": "^3.2.2",
