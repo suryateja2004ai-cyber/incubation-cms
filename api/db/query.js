@@ -18,6 +18,10 @@ export default async function handler(req, res) {
     const { neon } = await import('@neondatabase/serverless');
     const sql = neon(dbUrl);
 
+    const urlObj = new URL(req.url || '/', 'http://localhost');
+    const action = req.query?.action || urlObj.searchParams.get('action');
+    const tableParam = req.query?.table || urlObj.searchParams.get('table');
+
     // Auto-create visits table in Neon if missing
     await sql`
       CREATE TABLE IF NOT EXISTS public.visits (
@@ -36,7 +40,7 @@ export default async function handler(req, res) {
     `;
 
     // 1. Reconciliation action
-    if (req.query?.action === 'reconcile') {
+    if (action === 'reconcile') {
       // Correct Harsha Vardhan
       await sql`
         UPDATE public.passwords
@@ -90,7 +94,7 @@ export default async function handler(req, res) {
 
     // 2. GET Table Data
     if (req.method === 'GET') {
-      const table = (req.query?.table || '').trim().toLowerCase();
+      const table = (tableParam || '').trim().toLowerCase();
       let rows = [];
 
       switch (table) {

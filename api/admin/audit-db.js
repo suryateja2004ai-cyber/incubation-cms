@@ -14,8 +14,11 @@ export default async function handler(req, res) {
     const { neon } = await import('@neondatabase/serverless');
     const sql = neon(dbUrl);
 
+    const urlObj = new URL(req.url || '/', 'http://localhost');
+    const action = req.query?.action || urlObj.searchParams.get('action');
+
     // Auto-reconcile database records
-    if (req.query?.action === 'reconcile') {
+    if (action === 'reconcile') {
       // 1. Correct Harsha Vardhan
       await sql`
         UPDATE public.passwords
