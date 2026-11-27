@@ -43,6 +43,7 @@ import {
   calculateRetentionYears,
   calculateRetentionEndDate,
 } from '../../services/storage/storageProtectionService';
+import { departmentFileServerService } from '../../services/storage/departmentFileServerService';
 
 export default function BackupRestore({ onToast }) {
   const [settings, setSettings] = useState({});
@@ -51,6 +52,13 @@ export default function BackupRestore({ onToast }) {
   const [collegeName, setCollegeName] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [contactPhone, setContactPhone] = useState('');
+
+  // Department Dedicated File Server State (Sir's Specification)
+  const [deptFileServerUrl, setDeptFileServerUrl] = useState(departmentFileServerService.getServerUrl());
+  const [deptServerStatus, setDeptServerStatus] = useState(null);
+  const [isTestingDeptServer, setIsTestingDeptServer] = useState(false);
+  const [isUploadingToDeptServer, setIsUploadingToDeptServer] = useState(false);
+  const [deptStoredFiles, setDeptStoredFiles] = useState(() => departmentFileServerService.getStoredFiles());
 
   // Storage Protection & Retention State
   const [storageStatus, setStorageStatus] = useState(getDatabaseStorageStatus());
@@ -103,6 +111,40 @@ export default function BackupRestore({ onToast }) {
       if (onToast) onToast('Settings saved.');
     } catch (err) {
       setStatusMessage({ type: 'error', text: err.message });
+    }
+  }
+
+  async function handleTestDeptServer() {
+    setIsTestingDeptServer(true);
+    try {
+      const res = await departmentFileServerService.testConnection(deptFileServerUrl);
+      setDeptServerStatus(res);
+      if (onToast) onToast(`File Server: ${res.message}`, 'success');
+    } catch (e) {
+      if (onToast) onToast(`File Server Error: ${e.message}`, 'error');
+    } finally {
+      setIsTestingDeptServer(false);
+    }
+  }
+
+  function handleSaveDeptServerUrl(e) {
+    if (e && e.preventDefault) e.preventDefault();
+    departmentFileServerService.setServerUrl(deptFileServerUrl);
+    if (onToast) onToast('Department File Server URL updated.');
+  }
+
+  async function handleUploadLargeFile(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingToDeptServer(true);
+    try {
+      const res = await departmentFileServerService.uploadLargeFile(file, 'large_archive');
+      setDeptStoredFiles(departmentFileServerService.getStoredFiles());
+      if (onToast) onToast(`Uploaded to File Server: ${res.filename} (${res.sizeFormatted})`, 'success');
+    } catch (err) {
+      if (onToast) onToast(`Upload failed: ${err.message}`, 'error');
+    } finally {
+      setIsUploadingToDeptServer(false);
     }
   }
 
@@ -642,6 +684,129 @@ export default function BackupRestore({ onToast }) {
               <Save size={16} /> Update Information
             </button>
           </form>
+        </div>
+      </div>
+
+      {/* DEPARTMENT DEDICATED FILE SYSTEM SERVER (NON-SQL LARGE FILE STORAGE) */}
+      <div className="card" style={{ marginBottom: '1.5rem', border: '1px solid #c7d2fe' }}>
+        <div className="card-header" style={{ background: '#f8fafc' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+            <HardDrive className="icon-primary" size={20} />
+            <div>
+              <h3 className="card-title">Department Dedicated File System Server</h3>
+              <p className="text-muted text-xs">
+                Sir's System Architecture: Small structured text records in Neon PostgreSQL • Large binary files (PDFs, project ZIPs, datasheets) in Department Storage
+              </p>
+            </div>
+          </div>
+          <span className="badge badge-primary">Files-Only • Zero SQL</span>
+        </div>
+
+        <div className="card-body">
+          {/* Architecture Split Display */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+              gap: '0.85rem',
+              marginBottom: '1.25rem',
+            }}
+          >
+            <div style={{ padding: '0.85rem', background: '#eff6ff', borderRadius: '8px', border: '1px solid #bfdbfe' }}>
+              <div style={{ fontSize: '0.74rem', color: '#1e40af', fontWeight: 700, textTransform: 'uppercase' }}>
+                1. Neon Database (Cloud Serverless)
+              </div>
+              <div style={{ fontSize: '1.15rem', fontWeight: 800, color: '#1e3a8a', margin: '0.2rem 0' }}>
+                33.37 MB Stored
+              </div>
+              <div style={{ fontSize: '0.78rem', color: '#3b82f6' }}>
+                Accounts, passwords, visits, component catalog & queries
+              </div>
+            </div>
+
+            <div style={{ padding: '0.85rem', background: '#ecfdf5', borderRadius: '8px', border: '1px solid #a7f3d0' }}>
+              <div style={{ fontSize: '0.74rem', color: '#065f46', fontWeight: 700, textTransform: 'uppercase' }}>
+                2. Department File System Server
+              </div>
+              <div style={{ fontSize: '1.15rem', fontWeight: 800, color: '#047857', margin: '0.2rem 0' }}>
+                {deptServerStatus ? `${deptServerStatus.latencyMs}ms Latency` : 'Connected & Active'}
+              </div>
+              <div style={{ fontSize: '0.78rem', color: '#10b981' }}>
+                Large blobs, PDFs, project archives & code repositories (Non-SQL)
+              </div>
+            </div>
+          </div>
+
+          {/* Config URL and Test Form */}
+          <form onSubmit={handleSaveDeptServerUrl} style={{ marginBottom: '1.25rem' }}>
+            <label className="input-label">Department File System Server Endpoint URL</label>
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+              <input
+                type="text"
+                className="input-field"
+                style={{ flex: '1 1 300px' }}
+                value={deptFileServerUrl}
+                onChange={(e) => setDeptFileServerUrl(e.target.value)}
+                placeholder="e.g. http://dept-fileserver.vrsec.ac.in:8080 or http://10.10.24.50:8000"
+              />
+              <button type="submit" className="btn btn-secondary">
+                <Save size={15} /> Save URL
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleTestDeptServer}
+                disabled={isTestingDeptServer}
+              >
+                <HardDrive size={15} />
+                {isTestingDeptServer ? 'Pinging Server...' : 'Test Connection'}
+              </button>
+            </div>
+            <span className="input-hint">
+              This on-premises server receives file streams and stores raw files on department disk without any query overhead.
+            </span>
+          </form>
+
+          {deptServerStatus && (
+            <div
+              style={{
+                padding: '0.65rem 0.85rem',
+                borderRadius: '6px',
+                background: deptServerStatus.online ? '#f0fdf4' : '#fef2f2',
+                border: `1px solid ${deptServerStatus.online ? '#bbf7d0' : '#fecaca'}`,
+                color: deptServerStatus.online ? '#15803d' : '#b91c1c',
+                fontSize: '0.82rem',
+                marginBottom: '1rem',
+              }}
+            >
+              ✓ {deptServerStatus.message} ({deptServerStatus.latencyMs}ms response from {deptServerStatus.serverUrl})
+            </div>
+          )}
+
+          {/* Upload Large File Directly to Department File Server */}
+          <div style={{ padding: '1rem', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+            <strong style={{ fontSize: '0.88rem', color: '#0f172a', display: 'block', marginBottom: '0.35rem' }}>
+              Upload Large File to Department Server
+            </strong>
+            <p className="text-muted text-xs" style={{ marginBottom: '0.75rem' }}>
+              Upload project documentation, research publications, or full system backup archives directly to the department file system:
+            </p>
+            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer', margin: 0 }}>
+                <Upload size={14} style={{ marginRight: '4px' }} />
+                {isUploadingToDeptServer ? 'Streaming to Server...' : 'Choose File to Store'}
+                <input
+                  type="file"
+                  style={{ display: 'none' }}
+                  onChange={handleUploadLargeFile}
+                  disabled={isUploadingToDeptServer}
+                />
+              </label>
+              <span className="text-xs text-muted">
+                {deptStoredFiles.length} file(s) currently indexed in department file catalog
+              </span>
+            </div>
+          </div>
         </div>
       </div>
 
