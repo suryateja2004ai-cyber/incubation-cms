@@ -1280,6 +1280,12 @@ export async function initDatabase() {
     if (!localUsers.some((u) => u.rollNumber?.toUpperCase() === 'SIR')) {
       localUsers = [...localUsers, SIR_USER];
     }
+    let faceEmbeddingsStore = {};
+    try {
+      const rawFe = typeof localStorage !== 'undefined' ? localStorage.getItem('cms_face_embeddings_v2') : null;
+      if (rawFe) faceEmbeddingsStore = JSON.parse(rawFe);
+    } catch (_) {}
+
     localUsers = localUsers
       .filter((u) => {
         if (!u) return false;
@@ -1288,14 +1294,18 @@ export async function initDatabase() {
         if (u.role === 'student' && cleanRoll.length !== 10) return false;
         return true;
       })
-      .map((u) => ({
-        ...u,
-        faceRegistered: Boolean(u.faceRegistered !== undefined ? u.faceRegistered : (u.rollNumber === '238W1A0477')),
-        branch: u.branch || (u.role === 'sir' ? 'ECE' : 'ECE'),
-        section: u.section || (u.role === 'sir' ? 'Faculty Mentor' : 'A'),
-        academicYear: u.academicYear || (u.role === 'sir' ? 0 : 3),
-        avatarTheme: u.avatarTheme || (u.role === 'sir' ? 'emerald' : 'indigo'),
-      }));
+      .map((u) => {
+        const cleanRoll = String(u.rollNumber || u.username || '').trim().toUpperCase();
+        const hasStoredFace = Boolean(faceEmbeddingsStore[cleanRoll] || cleanRoll === '238W1A0477');
+        return {
+          ...u,
+          faceRegistered: Boolean(u.faceRegistered || hasStoredFace),
+          branch: u.branch || (u.role === 'sir' ? 'ECE' : 'ECE'),
+          section: u.section || (u.role === 'sir' ? 'Faculty Mentor' : 'A'),
+          academicYear: u.academicYear || (u.role === 'sir' ? 0 : 3),
+          avatarTheme: u.avatarTheme || (u.role === 'sir' ? 'emerald' : 'indigo'),
+        };
+      });
 
     let localDevices = getLocalArray(STORAGE_KEYS.DEVICES, INITIAL_DEVICES);
     let localVisits = getLocalArray(STORAGE_KEYS.VISITS, INITIAL_VISITS);
@@ -1446,9 +1456,11 @@ export async function initDatabase() {
               });
               hasChanges = true;
             } else {
-              if (pgUser.face_registered !== undefined && existing.faceRegistered !== Boolean(pgUser.face_registered)) {
-                existing.faceRegistered = Boolean(pgUser.face_registered);
-                hasChanges = true;
+              if (pgUser.face_registered) {
+                if (!existing.faceRegistered) {
+                  existing.faceRegistered = true;
+                  hasChanges = true;
+                }
               } else if (cleanRoll === '238W1A0477' && !existing.faceRegistered) {
                 existing.faceRegistered = true;
                 hasChanges = true;
