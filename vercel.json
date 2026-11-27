@@ -3,7 +3,7 @@
   "outputDirectory": "frontend/dist",
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/((?!api/|sw\\.js|favicon\\.ico).*)",
       "destination": "/index.html"
     }
   ]
