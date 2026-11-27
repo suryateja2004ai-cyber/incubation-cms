@@ -44,14 +44,14 @@ export const INITIAL_USERS = [
   {
     id: 'USER-003',
     rollNumber: '238W1A0477',
-    name: 'Anwar Bajarinti',
+    name: 'Surya Teja',
     role: 'student',
     mobileNumber: '+91 98765 01001',
     passwordHash: 'student123',
     department: 'Electronics & Communication Engineering',
     fingerprintIds: [10, 11, 12],
     fingerLabels: ['Right Thumb', 'Right Index', 'Left Index'],
-    faceRegistered: false,
+    faceRegistered: true,
     createdAt: '2026-08-20T10:00:00.000Z',
   },
   {

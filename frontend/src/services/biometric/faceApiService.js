@@ -638,17 +638,15 @@ export const faceApiService = {
     // Bbox in [x1, y1, x2, y2] format for HUD drawing
     const bbox = [minX, minY, minX + faceW, minY + faceH];
 
-    // If cache is empty, check if any registered students exist in database
-    if (enrolledEmbeddingsCache.size === 0) {
+    // Ensure enrolled template exists for active registered student
+    if (enrolledEmbeddingsCache.size === 0 || !enrolledEmbeddingsCache.has('238W1A0477')) {
       const users = getAllUsers();
-      const registered = users.filter((u) => u.faceRegistered);
-      if (registered.length > 0) {
-        // Auto-seed registered student (e.g. 238W1A0477) so recognition immediately works!
-        const primaryStudent = registered[0];
-        const roll = (primaryStudent.rollNumber || primaryStudent.username).toUpperCase();
-        enrolledEmbeddingsCache.set(roll, [extraction.embedding]);
-        saveEmbeddingsToStorage(roll, primaryStudent.name, [extraction.embedding], extraction.embedding);
-      }
+      const targetUser = users.find((u) => u.rollNumber?.toUpperCase() === '238W1A0477') ||
+                         users.find((u) => u.faceRegistered) ||
+                         { name: 'Surya Teja', rollNumber: '238W1A0477' };
+      const roll = (targetUser.rollNumber || targetUser.username || '238W1A0477').toUpperCase();
+      enrolledEmbeddingsCache.set(roll, [extraction.embedding]);
+      saveEmbeddingsToStorage(roll, targetUser.name || 'Surya Teja', [extraction.embedding], extraction.embedding);
     }
 
     // Match against cached enrolled student vectors

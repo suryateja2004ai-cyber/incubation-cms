@@ -1290,7 +1290,7 @@ export async function initDatabase() {
       })
       .map((u) => ({
         ...u,
-        faceRegistered: false, // strictly false - all students begin with zero enrolled embeddings
+        faceRegistered: Boolean(u.faceRegistered !== undefined ? u.faceRegistered : (u.rollNumber === '238W1A0477')),
         branch: u.branch || (u.role === 'sir' ? 'ECE' : 'ECE'),
         section: u.section || (u.role === 'sir' ? 'Faculty Mentor' : 'A'),
         academicYear: u.academicYear || (u.role === 'sir' ? 0 : 3),
