@@ -54,6 +54,16 @@ export default async function handler(req, res) {
         RETURNING id, roll_number, student_name, email, role, academic_year_at_start, incubation_start_date, retention_period_years, retention_end_date;
       `;
 
+      if (student_name) {
+        try {
+          await sql`
+            UPDATE public.student_face_embeddings
+            SET student_name = ${student_name}
+            WHERE UPPER(TRIM(roll_number)) = ${cleanRoll};
+          `;
+        } catch (_) {}
+      }
+
       if (rows && rows.length > 0) {
         return res.status(200).json({
           success: true,
@@ -61,6 +71,36 @@ export default async function handler(req, res) {
           account: rows[0],
         });
       }
+
+      // If user does not exist in passwords yet, auto-provision
+      const insertRows = await sql`
+        INSERT INTO public.passwords (
+          roll_number, password, student_name, email, role, department, 
+          phone_number, created_at, updated_at, academic_year_at_start, 
+          incubation_start_date, retention_period_years, retention_end_date
+        ) VALUES (
+          ${cleanRoll},
+          'student123',
+          ${student_name || `Student ${cleanRoll}`},
+          ${email || ''},
+          'student',
+          ${department || 'ECE'},
+          ${phone_number || '9876543213'},
+          NOW(),
+          NOW(),
+          ${startYear || 1},
+          ${startDate || new Date().toISOString().slice(0, 10)},
+          4,
+          NOW() + INTERVAL '4 years'
+        )
+        RETURNING id, roll_number, student_name, email, role, academic_year_at_start, incubation_start_date, retention_period_years, retention_end_date;
+      `;
+
+      return res.status(200).json({
+        success: true,
+        message: 'Account created successfully in Neon database!',
+        account: insertRows[0],
+      });
     } catch (dbErr) {
       console.error('Neon update-account error:', dbErr);
       return res.status(500).json({ success: false, error: dbErr.message });

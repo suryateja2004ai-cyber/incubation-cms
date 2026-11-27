@@ -281,6 +281,105 @@ export default async function handler(req, res) {
       return res.status(201).json({ success: true, message: 'Enrolled in Neon PostgreSQL cloud biometrics.' });
     }
 
+    // -------------------------------------------------------------
+    // 7. ADMIN RECONCILIATION & AUDIT
+    // -------------------------------------------------------------
+    if (pathname === '/api/admin/reconcile-db' || (pathname === '/api/admin/audit-db' && url.searchParams.get('action') === 'reconcile')) {
+      if (!process.env.DATABASE_URL) return res.status(200).json({ success: false, error: 'DATABASE_URL not set' });
+      const sql = getDb();
+      await sql`
+        UPDATE public.passwords
+        SET student_name = 'Harsha Vardhan', email = '238w1a0477@vrsec.ac.in', department = 'ECE', updated_at = NOW()
+        WHERE UPPER(TRIM(roll_number)) = '238W1A0477';
+      `;
+      const hemaCheck = await sql`SELECT id FROM public.passwords WHERE UPPER(TRIM(roll_number)) = '238W1A0481';`;
+      if (!hemaCheck || hemaCheck.length === 0) {
+        await sql`
+          INSERT INTO public.passwords (
+            roll_number, password, student_name, role, department, 
+            phone_number, email, created_at, updated_at, academic_year_at_start, 
+            incubation_start_date, retention_period_years, retention_end_date
+          ) VALUES (
+            '238W1A0481', 'student123', 'Hema Priya', 'student', 'ECE',
+            '9876543213', '238w1a0481@vrsec.ac.in', NOW(), NOW(), 1, CURRENT_DATE, 4, CURRENT_DATE + INTERVAL '4 years'
+          );
+        `;
+      }
+      await sql`
+        UPDATE public.student_face_embeddings
+        SET student_name = 'Harsha Vardhan'
+        WHERE UPPER(TRIM(roll_number)) = '238W1A0477';
+      `;
+      await sql`
+        UPDATE public.student_face_embeddings
+        SET student_name = 'Hema Priya'
+        WHERE UPPER(TRIM(roll_number)) = '238W1A0481';
+      `;
+      await sql`
+        UPDATE public.issued_components
+        SET student_name = 'Harsha Vardhan', updated_at = NOW()
+        WHERE UPPER(TRIM(registration_number)) = '238W1A0477';
+      `;
+      return res.status(200).json({
+        success: true,
+        message: 'Neon database reconciliation complete: Harsha Vardhan (238W1A0477) and Hema Priya (238W1A0481) 100% synchronized.',
+      });
+    }
+
+    if (pathname === '/api/auth/users' && req.method === 'GET') {
+      if (!process.env.DATABASE_URL) return res.status(200).json({ success: true, users: [] });
+      const sql = getDb();
+      const rows = await sql`
+        SELECT 
+          p.id, p.roll_number, p.student_name, p.student_name as name, 
+          p.email, p.role, p.department, p.phone_number, p.phone_number as mobile_number,
+          p.academic_year_at_start, p.incubation_start_date, p.retention_period_years, p.retention_end_date,
+          p.created_at, p.updated_at,
+          (f.id IS NOT NULL) as face_registered
+        FROM public.passwords p
+        LEFT JOIN (
+          SELECT DISTINCT ON (UPPER(TRIM(roll_number))) roll_number, id
+          FROM public.student_face_embeddings
+        ) f ON UPPER(TRIM(p.roll_number)) = UPPER(TRIM(f.roll_number))
+        WHERE p.role = 'student' OR p.role IS NULL
+        ORDER BY p.created_at DESC;
+      `;
+      return res.status(200).json({ success: true, users: rows });
+    }
+
+    if (pathname === '/api/auth/all-accounts' && req.method === 'GET') {
+      if (!process.env.DATABASE_URL) return res.status(200).json({ success: true, accounts: [] });
+      const sql = getDb();
+      const rows = await sql`
+        SELECT 
+          p.id, p.roll_number, p.student_name, p.student_name as name, 
+          p.email, p.role, p.department, p.phone_number, p.phone_number as mobile_number,
+          p.academic_year_at_start, p.incubation_start_date, p.retention_period_years, p.retention_end_date,
+          p.created_at, p.updated_at,
+          (f.id IS NOT NULL) as face_registered
+        FROM public.passwords p
+        LEFT JOIN (
+          SELECT DISTINCT ON (UPPER(TRIM(roll_number))) roll_number, id
+          FROM public.student_face_embeddings
+        ) f ON UPPER(TRIM(p.roll_number)) = UPPER(TRIM(f.roll_number))
+        ORDER BY 
+          CASE WHEN p.role = 'admin' THEN 1 WHEN p.role = 'substitute_admin' THEN 2 ELSE 3 END,
+          p.created_at ASC;
+      `;
+      return res.status(200).json({ success: true, accounts: rows });
+    }
+
+    if (pathname === '/api/face/embeddings' && req.method === 'GET') {
+      if (!process.env.DATABASE_URL) return res.status(200).json({ success: true, embeddings: [] });
+      const sql = getDb();
+      const rows = await sql`
+        SELECT id, roll_number, student_name, embedding_vector, created_at 
+        FROM public.student_face_embeddings
+        ORDER BY created_at DESC;
+      `;
+      return res.status(200).json({ success: true, embeddings: rows });
+    }
+
     // Default 404
     return res.status(404).json({ error: `Endpoint ${pathname} not found` });
 

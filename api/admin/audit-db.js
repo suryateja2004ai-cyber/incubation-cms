@@ -22,7 +22,7 @@ export default async function handler(req, res) {
       // 1. Correct Harsha Vardhan
       await sql`
         UPDATE public.passwords
-        SET student_name = 'Harsha Vardhan', department = 'ECE', updated_at = NOW()
+        SET student_name = 'Harsha Vardhan', email = '238w1a0477@vrsec.ac.in', department = 'ECE', updated_at = NOW()
         WHERE UPPER(TRIM(roll_number)) = '238W1A0477';
       `;
       // 2. Insert Hema Priya if missing
@@ -31,11 +31,11 @@ export default async function handler(req, res) {
         await sql`
           INSERT INTO public.passwords (
             roll_number, password, student_name, role, department, 
-            phone_number, created_at, updated_at, academic_year_at_start, 
+            phone_number, email, created_at, updated_at, academic_year_at_start, 
             incubation_start_date, retention_period_years, retention_end_date
           ) VALUES (
             '238W1A0481', 'student123', 'Hema Priya', 'student', 'ECE',
-            '9876543213', NOW(), NOW(), 1, '2026-11-27', 4, '2030-11-27'
+            '9876543213', '238w1a0481@vrsec.ac.in', NOW(), NOW(), 1, CURRENT_DATE, 4, CURRENT_DATE + INTERVAL '4 years'
           );
         `;
       }
@@ -99,7 +99,7 @@ export default async function handler(req, res) {
     // 4. Fetch face embeddings
     let faceEmbeddings = [];
     try {
-      faceEmbeddings = await sql`SELECT id, roll_number, student_name, created_at FROM public.student_face_embeddings;`;
+      faceEmbeddings = await sql`SELECT id, roll_number, student_name, created_at FROM public.student_face_embeddings ORDER BY created_at DESC;`;
     } catch (e) {
       faceEmbeddings = [{ error: e.message }];
     }
@@ -107,22 +107,26 @@ export default async function handler(req, res) {
     // 5. Fetch issued components
     let issued = [];
     try {
-      issued = await sql`SELECT id, registration_number, student_name, phone_number, status FROM public.issued_components LIMIT 50;`;
+      issued = await sql`SELECT id, registration_number, student_name, phone_number, status FROM public.issued_components ORDER BY issue_date DESC LIMIT 50;`;
     } catch (e) {
       issued = [{ error: e.message }];
     }
 
-    // 6. Search across all tables for 'hema' or 'priya'
-    const searchResults = {
-      passwords_matches: passwords.filter(p => /hema|priya/i.test(JSON.stringify(p))),
-      visitors_matches: visitors.filter(v => /hema|priya/i.test(JSON.stringify(v))),
-      face_matches: faceEmbeddings.filter(f => /hema|priya/i.test(JSON.stringify(f))),
-      issued_matches: issued.filter(i => /hema|priya/i.test(JSON.stringify(i))),
-    };
+    // 6. Search for any discrepancies or matches
+    const searchParam = req.query?.search || urlObj.searchParams.get('search') || '238W1A0481';
+    let searchResults = {};
+    if (searchParam) {
+      const q = `%${searchParam}%`;
+      const pMatches = await sql`SELECT id, roll_number, student_name, email FROM public.passwords WHERE roll_number ILIKE ${q} OR student_name ILIKE ${q};`;
+      const vMatches = await sql`SELECT id, full_name, phone_number FROM public.visitor_attendance WHERE full_name ILIKE ${q} OR visitor_id ILIKE ${q};`;
+      const fMatches = await sql`SELECT id, roll_number, student_name, created_at FROM public.student_face_embeddings WHERE roll_number ILIKE ${q} OR student_name ILIKE ${q};`;
+      const iMatches = await sql`SELECT id, registration_number, student_name, phone_number, status FROM public.issued_components WHERE registration_number ILIKE ${q} OR student_name ILIKE ${q};`;
+      searchResults = { passwords_matches: pMatches, visitors_matches: vMatches, face_matches: fMatches, issued_matches: iMatches };
+    }
 
     return res.status(200).json({
       success: true,
-      tables: tables.map(t => t.table_name),
+      tables: tables.map((t) => t.table_name),
       passwords,
       visitors,
       faceEmbeddings,
@@ -130,6 +134,7 @@ export default async function handler(req, res) {
       searchResults,
     });
   } catch (err) {
+    console.error('Neon audit error:', err);
     return res.status(500).json({ success: false, error: err.message });
   }
 }

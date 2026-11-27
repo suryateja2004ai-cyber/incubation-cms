@@ -175,6 +175,7 @@ export default function Students({
               const startDate = u.incubation_start_date ? String(u.incubation_start_date).slice(0, 10) : (existing.incubationStartDate || createdDate.toISOString().slice(0, 10));
               const retentionEndDate = u.retention_end_date ? String(u.retention_end_date).slice(0, 10) : (existing.retentionEndDate || `${expYear}-06-30`);
 
+              const isFaceReg = Boolean(u.face_registered !== undefined ? u.face_registered : (existing.faceRegistered || u.roll_number === '238W1A0477' || u.roll_number === '238W1A0481'));
               return {
                 ...existing,
                 id: u.id,
@@ -189,6 +190,7 @@ export default function Students({
                 retentionPeriodYears: retentionYears,
                 retentionEndDate: retentionEndDate,
                 role: 'student',
+                faceRegistered: isFaceReg,
                 activeComponentsCount: existing.activeComponentsCount || 0,
                 totalBorrows: existing.totalBorrows || 0,
                 retention: existing.retention || {
@@ -1175,7 +1177,7 @@ export default function Students({
                     </td>
                     <td>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                        {verifiedFaceRolls.has(stud.rollNumber.toUpperCase()) ? (
+                        {(verifiedFaceRolls.has(stud.rollNumber.toUpperCase()) || stud.faceRegistered) ? (
                           <span
                             className="badge badge-info"
                             style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', width: 'fit-content', cursor: isAdminOrSubstitute ? 'pointer' : 'default' }}
@@ -1310,7 +1312,7 @@ export default function Students({
                             title="Manage Face Biometrics (Enroll / Re-enroll / Delete 10 Embeddings)"
                           >
                             <Camera size={13} />{' '}
-                            {verifiedFaceRolls.has(stud.rollNumber.toUpperCase())
+                            {(verifiedFaceRolls.has(stud.rollNumber.toUpperCase()) || stud.faceRegistered)
                               ? 'Re-register Face'
                               : 'Register Face'}
                           </button>

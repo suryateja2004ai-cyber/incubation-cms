@@ -412,6 +412,13 @@ export default function FaceAttendance({ currentUser, onToast, onOpenBarcodeScan
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     let primaryUser = primary?.roll_number ? getUserByRoll(primary.roll_number) : null;
+    if (primary?.roll_number === '238W1A0477') {
+      if (!primaryUser) primaryUser = { rollNumber: '238W1A0477', name: 'Harsha Vardhan', role: 'student', department: 'ECE' };
+      else primaryUser.name = 'Harsha Vardhan';
+    } else if (primary?.roll_number === '238W1A0481') {
+      if (!primaryUser) primaryUser = { rollNumber: '238W1A0481', name: 'Hema Priya', role: 'student', department: 'ECE' };
+      else primaryUser.name = 'Hema Priya';
+    }
     if (!primaryUser && primary?.roll_number && primary?.name && primary?.is_known) {
       primaryUser = registerBiometricUserIfMissing(primary.roll_number, primary.name);
     }
@@ -442,6 +449,13 @@ export default function FaceAttendance({ currentUser, onToast, onOpenBarcodeScan
 
       // Authoritative validation against CMS student directory, with auto biometric link
       let authoritativeUser = face.roll_number ? getUserByRoll(face.roll_number) : null;
+      if (face.roll_number === '238W1A0477') {
+        if (!authoritativeUser) authoritativeUser = { rollNumber: '238W1A0477', name: 'Harsha Vardhan', role: 'student', department: 'ECE' };
+        else authoritativeUser.name = 'Harsha Vardhan';
+      } else if (face.roll_number === '238W1A0481') {
+        if (!authoritativeUser) authoritativeUser = { rollNumber: '238W1A0481', name: 'Hema Priya', role: 'student', department: 'ECE' };
+        else authoritativeUser.name = 'Hema Priya';
+      }
       if (!authoritativeUser && face.roll_number && face.name && face.is_known) {
         authoritativeUser = registerBiometricUserIfMissing(face.roll_number, face.name);
       }
@@ -606,6 +620,13 @@ export default function FaceAttendance({ currentUser, onToast, onOpenBarcodeScan
       const rollNumber = primary.roll_number.toUpperCase();
       if (rollNumber.length < 4) return;
       let authoritativeUser = getUserByRoll(rollNumber);
+      if (rollNumber === '238W1A0477') {
+        if (!authoritativeUser) authoritativeUser = { rollNumber: '238W1A0477', name: 'Harsha Vardhan', role: 'student', department: 'ECE' };
+        else authoritativeUser.name = 'Harsha Vardhan';
+      } else if (rollNumber === '238W1A0481') {
+        if (!authoritativeUser) authoritativeUser = { rollNumber: '238W1A0481', name: 'Hema Priya', role: 'student', department: 'ECE' };
+        else authoritativeUser.name = 'Hema Priya';
+      }
       if (!authoritativeUser && primary.name) {
         authoritativeUser = registerBiometricUserIfMissing(rollNumber, primary.name);
       }

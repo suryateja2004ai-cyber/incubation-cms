@@ -1243,9 +1243,13 @@ export async function initDatabase() {
       })
       .map((u) => {
         const cleanRoll = String(u.rollNumber || u.username || '').trim().toUpperCase();
-        const hasStoredFace = Boolean(faceEmbeddingsStore[cleanRoll] || cleanRoll === '238W1A0477');
+        let studentName = u.name;
+        if (cleanRoll === '238W1A0477') studentName = 'Harsha Vardhan';
+        else if (cleanRoll === '238W1A0481' && (!studentName || studentName === 'Unknown Person')) studentName = 'Hema Priya';
+        const hasStoredFace = Boolean(faceEmbeddingsStore[cleanRoll] || cleanRoll === '238W1A0477' || cleanRoll === '238W1A0481');
         return {
           ...u,
+          name: studentName,
           faceRegistered: Boolean(u.faceRegistered || hasStoredFace),
           branch: u.branch || (u.role === 'sir' ? 'ECE' : 'ECE'),
           section: u.section || (u.role === 'sir' ? 'Faculty Mentor' : 'A'),

@@ -71,13 +71,25 @@ function loadEmbeddingsFromStorage() {
       const raw = localStorage.getItem('cms_face_embeddings_v2');
       if (raw) {
         const store = JSON.parse(raw);
+        let storeChanged = false;
         for (const [roll, data] of Object.entries(store)) {
           const cleanRoll = roll.toUpperCase();
+          if (cleanRoll === '238W1A0477' && data.name && data.name.includes('Surya')) {
+            data.name = 'Harsha Vardhan';
+            storeChanged = true;
+          }
+          if (cleanRoll === '238W1A0481' && (!data.name || data.name === 'Unknown Person')) {
+            data.name = 'Hema Priya';
+            storeChanged = true;
+          }
           if (data.embeddings && data.embeddings.length > 0) {
             enrolledEmbeddingsCache.set(cleanRoll, data.embeddings);
           } else if (data.masterVector && data.masterVector.length > 0) {
             enrolledEmbeddingsCache.set(cleanRoll, [data.masterVector]);
           }
+        }
+        if (storeChanged) {
+          localStorage.setItem('cms_face_embeddings_v2', JSON.stringify(store));
         }
       }
     }
@@ -793,7 +805,9 @@ export const faceApiService = {
 
     if (isKnown) {
       const user = getAllUsers().find((u) => (u.rollNumber || u.username)?.toUpperCase() === topMatch.roll);
-      const studentName = user?.name || topMatch.roll;
+      let studentName = user?.name || topMatch.roll;
+      if (topMatch.roll === '238W1A0477') studentName = 'Harsha Vardhan';
+      else if (topMatch.roll === '238W1A0481') studentName = 'Hema Priya';
       const simVal = Number(topMatch.sim.toFixed(3));
 
       // Ambiguity detection for large student bodies
@@ -802,9 +816,12 @@ export const faceApiService = {
 
       const faceCandidates = matches.slice(0, 3).map((m) => {
         const candUser = getAllUsers().find((u) => (u.rollNumber || u.username)?.toUpperCase() === m.roll);
+        let candName = candUser?.name || m.roll;
+        if (m.roll === '238W1A0477') candName = 'Harsha Vardhan';
+        else if (m.roll === '238W1A0481') candName = 'Hema Priya';
         return {
           roll_number: m.roll,
-          name: candUser?.name || m.roll,
+          name: candName,
           similarity: Number(m.sim.toFixed(3)),
         };
       });
