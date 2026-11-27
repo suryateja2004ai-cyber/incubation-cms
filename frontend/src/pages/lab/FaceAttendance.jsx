@@ -566,7 +566,7 @@ export default function FaceAttendance({ currentUser, onToast, onOpenBarcodeScan
         // Only one valid CMS candidate
         const singleCand = validCandidates[0];
         const rollNumber = singleCand.roll_number.toUpperCase();
-        if (rollNumber.length !== 10) return;
+        if (rollNumber.length < 4) return;
         const authoritativeUser = getUserByRoll(rollNumber);
         const now = Date.now();
         const lastSeen = cooldownMapRef.current.get(rollNumber) || 0;
@@ -593,7 +593,7 @@ export default function FaceAttendance({ currentUser, onToast, onOpenBarcodeScan
     // Case 4: Unique Match
     if (matchType === 'unique' && primary.roll_number) {
       const rollNumber = primary.roll_number.toUpperCase();
-      if (rollNumber.length !== 10) return;
+      if (rollNumber.length < 4) return;
       let authoritativeUser = getUserByRoll(rollNumber);
       if (!authoritativeUser && primary.name) {
         authoritativeUser = registerBiometricUserIfMissing(rollNumber, primary.name);

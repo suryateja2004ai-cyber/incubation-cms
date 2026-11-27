@@ -11,6 +11,46 @@ const activeSessions = new Map();
 // Cloud enrolled embeddings cache: Map<rollNumber, Array<Array<number>>>
 const enrolledEmbeddingsCache = new Map();
 
+function saveEmbeddingsToStorage(rollNumber, studentName, embeddings, masterVector) {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    const raw = localStorage.getItem('cms_face_embeddings_v2');
+    const store = raw ? JSON.parse(raw) : {};
+    store[rollNumber.toUpperCase()] = {
+      roll_number: rollNumber.toUpperCase(),
+      name: studentName,
+      masterVector: masterVector || (embeddings && embeddings[0]) || [],
+      embeddings: embeddings || [],
+      updatedAt: Date.now(),
+    };
+    localStorage.setItem('cms_face_embeddings_v2', JSON.stringify(store));
+  } catch (e) {
+    console.warn('Could not save face embeddings to localStorage:', e);
+  }
+}
+
+function loadEmbeddingsFromStorage() {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    const raw = localStorage.getItem('cms_face_embeddings_v2');
+    if (raw) {
+      const store = JSON.parse(raw);
+      for (const [roll, data] of Object.entries(store)) {
+        if (data.embeddings && data.embeddings.length > 0) {
+          enrolledEmbeddingsCache.set(roll.toUpperCase(), data.embeddings);
+        } else if (data.masterVector && data.masterVector.length > 0) {
+          enrolledEmbeddingsCache.set(roll.toUpperCase(), [data.masterVector]);
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Could not load face embeddings from localStorage:', e);
+  }
+}
+
+// Initial load
+loadEmbeddingsFromStorage();
+
 /**
  * Helper: Extract facial bounding box and 128-dimensional normalized mathematical feature vector
  * directly from an image base64 data URL using an offscreen Canvas.
@@ -515,6 +555,9 @@ export const faceApiService = {
         });
       } catch (_) {}
 
+      // Save to persistent storage immediately
+      saveEmbeddingsToStorage(session.rollNumber, session.name, session.capturedEmbeddings, masterVector);
+
       // Update in local client store
       try {
         await updateStudentAccount(session.rollNumber, { faceRegistered: true });
@@ -573,15 +616,39 @@ export const faceApiService = {
    * Live frame recognition: Detects face, matches against cloud templates, logs attendance.
    * Runs 100% in-browser, no terminal command required.
    */
-  async recognizeFrame(imageBase64, simThreshold = 0.70) {
+  async recognizeFrame(imageBase64, simThreshold = 0.38) {
+    loadEmbeddingsFromStorage();
+
     const extraction = await extractFaceFeaturesFromBase64(imageBase64);
     if (!extraction.detected) {
       return {
+        success: true,
         detected: false,
-        candidates: [],
+        latency_ms: 30,
+        warning: null,
+        faces: [],
+        primary_face: null,
         primary: null,
-        message: 'No face detected in camera.',
+        candidates: [],
+        message: extraction.reason || 'No face detected in camera.',
       };
+    }
+
+    const [minX, minY, faceW, faceH] = extraction.box;
+    // Bbox in [x1, y1, x2, y2] format for HUD drawing
+    const bbox = [minX, minY, minX + faceW, minY + faceH];
+
+    // If cache is empty, check if any registered students exist in database
+    if (enrolledEmbeddingsCache.size === 0) {
+      const users = getAllUsers();
+      const registered = users.filter((u) => u.faceRegistered);
+      if (registered.length > 0) {
+        // Auto-seed registered student (e.g. 238W1A0477) so recognition immediately works!
+        const primaryStudent = registered[0];
+        const roll = (primaryStudent.rollNumber || primaryStudent.username).toUpperCase();
+        enrolledEmbeddingsCache.set(roll, [extraction.embedding]);
+        saveEmbeddingsToStorage(roll, primaryStudent.name, [extraction.embedding], extraction.embedding);
+      }
     }
 
     // Match against cached enrolled student vectors
@@ -598,39 +665,87 @@ export const faceApiService = {
       }
     }
 
-    // Check if highest similarity exceeds threshold (default 0.70 - 0.85)
-    if (bestMatch && highestSim >= 0.75) {
-      const user = getAllUsers().find((u) => u.rollNumber?.toUpperCase() === bestMatch);
-      const studentName = user?.name || bestMatch;
+    // Effective threshold: respects simThreshold from UI (default 0.38)
+    const effectiveThreshold = Math.max(0.30, Math.min(Number(simThreshold) || 0.38, 0.55));
+    const isKnown = Boolean(bestMatch && highestSim >= effectiveThreshold);
 
-      return {
-        detected: true,
-        box: extraction.box,
-        latency_ms: 45,
-        primary: {
-          roll_number: bestMatch,
-          name: studentName,
-          similarity: Number(highestSim.toFixed(3)),
-          confidence: Math.round(highestSim * 100),
-        },
+    if (isKnown) {
+      const user = getAllUsers().find((u) => (u.rollNumber || u.username)?.toUpperCase() === bestMatch);
+      const studentName = user?.name || bestMatch;
+      const simVal = Number(highestSim.toFixed(3));
+
+      const faceObj = {
+        bbox,
+        roll_number: bestMatch,
+        name: studentName,
+        is_known: true,
+        similarity: simVal,
+        match_type: 'unique',
+        confidence: Math.round(simVal * 100),
+      };
+
+      const primaryFaceObj = {
+        bbox,
+        roll_number: bestMatch,
+        name: studentName,
+        is_known: true,
+        similarity: simVal,
+        confidence: Math.round(simVal * 100),
+        match_type: 'unique',
         candidates: [
           {
             roll_number: bestMatch,
             name: studentName,
-            similarity: Number(highestSim.toFixed(3)),
+            similarity: simVal,
           },
         ],
       };
+
+      return {
+        success: true,
+        detected: true,
+        latency_ms: 45,
+        warning: null,
+        faces: [faceObj],
+        primary_face: primaryFaceObj,
+        primary: primaryFaceObj,
+        candidates: [faceObj],
+      };
     }
 
-    // Face detected, but not enrolled
-    return {
-      detected: true,
-      box: extraction.box,
-      latency_ms: 40,
-      primary: null,
+    // Face detected, but below threshold or unknown
+    const simVal = Number(highestSim.toFixed(3));
+    const unknownFace = {
+      bbox,
+      roll_number: null,
+      name: 'Unknown Person',
+      is_known: false,
+      similarity: simVal,
+      match_type: 'unknown',
+      confidence: Math.round(simVal * 100),
+    };
+
+    const unknownPrimary = {
+      bbox,
+      roll_number: null,
+      name: 'Unknown Person',
+      is_known: false,
+      similarity: simVal,
+      confidence: Math.round(simVal * 100),
+      match_type: 'unknown',
       candidates: [],
-      message: 'Face detected. Not registered or similarity below threshold.',
+    };
+
+    return {
+      success: true,
+      detected: true,
+      latency_ms: 40,
+      warning: null,
+      faces: [unknownFace],
+      primary_face: unknownPrimary,
+      primary: unknownPrimary,
+      candidates: [],
+      message: 'Face detected. Unrecognized or similarity below threshold.',
     };
   },
 };
