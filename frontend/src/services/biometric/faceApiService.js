@@ -41,8 +41,6 @@ async function extractFaceFeaturesFromBase64(imageBase64) {
       let totalLuminance = 0;
       let skinPixels = 0;
       let minX = width, maxX = 0, minY = height, maxY = 0;
-      let leftWeight = 0, rightWeight = 0;
-      const midX = width / 2;
 
       for (let y = 0; y < height; y += 4) {
         for (let x = 0; x < width; x += 4) {
@@ -61,9 +59,6 @@ async function extractFaceFeaturesFromBase64(imageBase64) {
             if (x > maxX) maxX = x;
             if (y < minY) minY = y;
             if (y > maxY) maxY = y;
-
-            if (x < midX) leftWeight += lum;
-            else rightWeight += lum;
           }
         }
       }
@@ -83,11 +78,48 @@ async function extractFaceFeaturesFromBase64(imageBase64) {
         });
       }
 
-      // 2. Pose Estimation (Yaw & Centering)
-      const balance = (rightWeight - leftWeight) / ((rightWeight + leftWeight) || 1);
+      // 2. Pose Estimation (Yaw & Centering within Face Bounding Box)
+      const faceMidX = minX + faceWidth / 2;
+      let leftSkinCount = 0;
+      let rightSkinCount = 0;
+      let leftSkinLum = 0;
+      let rightSkinLum = 0;
+      let skinSumX = 0;
+      let validSkinInBox = 0;
+
+      for (let y = minY; y <= maxY; y += 4) {
+        for (let x = minX; x <= maxX; x += 4) {
+          const idx = (y * width + x) * 4;
+          const r = data[idx];
+          const g = data[idx + 1];
+          const b = data[idx + 2];
+          const isSkin = r > 70 && g > 40 && b > 20 && r > g && r > b && Math.abs(r - g) > 10;
+          if (isSkin) {
+            validSkinInBox++;
+            skinSumX += x;
+            const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+            if (x < faceMidX) {
+              leftSkinCount++;
+              leftSkinLum += lum;
+            } else {
+              rightSkinCount++;
+              rightSkinLum += lum;
+            }
+          }
+        }
+      }
+
+      const countBalance = (rightSkinCount - leftSkinCount) / Math.max(1, rightSkinCount + leftSkinCount);
+      const lumBalance = (rightSkinLum - leftSkinLum) / Math.max(1, rightSkinLum + leftSkinLum);
+      const centroidOffset = validSkinInBox > 0 ? ((skinSumX / validSkinInBox) - faceMidX) / Math.max(1, faceWidth / 2) : 0;
+      const turnScore = (countBalance * 0.45) + (lumBalance * 0.35) + (centroidOffset * 0.20);
+
       let pose = 'straight';
-      if (balance > 0.18) pose = 'right';
-      else if (balance < -0.18) pose = 'left';
+      if (turnScore > 0.12) {
+        pose = 'left';
+      } else if (turnScore < -0.12) {
+        pose = 'right';
+      }
 
       // 3. Extract 128-Dimensional Mathematical Embedding Vector
       // 16 spatial grid cells (4x4) x 8 gradient/color frequency descriptors
@@ -278,6 +310,10 @@ export const faceApiService = {
       capturedInStep: 0,
       neededInStep: 6,
       createdAt: Date.now(),
+      lastCaptureTime: 0,
+      stepTransitionUntil: 0,
+      stepTransitionMessage: '',
+      completed: false,
     };
 
     activeSessions.set(sessionId, session);
@@ -295,6 +331,7 @@ export const faceApiService = {
       total_needed: 10,
       feedback: 'Please look directly into the camera.',
       pose_correct: false,
+      captured_this_frame: false,
     };
   },
 
@@ -308,9 +345,32 @@ export const faceApiService = {
       throw new Error('Registration session expired or invalid. Please start again.');
     }
 
+    // If session is already completed, return completed response gracefully without error
+    if (session.completed) {
+      return {
+        success: true,
+        complete: true,
+        completed: true,
+        step: 3,
+        total_steps: 3,
+        step_name: 'Registration Complete',
+        target_pose: 'straight',
+        needed_in_step: 2,
+        captured_in_step: 2,
+        total_captured: 10,
+        total_needed: 10,
+        feedback: 'Face registration complete! All 10 biometric templates synced to cloud.',
+        pose_correct: true,
+        captured_this_frame: false,
+      };
+    }
+
     const extraction = await extractFaceFeaturesFromBase64(imageBase64);
     if (!extraction.detected) {
       return {
+        success: true,
+        complete: false,
+        completed: false,
         step: session.currentStep,
         total_steps: 3,
         step_name: session.stepName,
@@ -319,41 +379,121 @@ export const faceApiService = {
         captured_in_step: session.capturedInStep,
         total_captured: session.capturedEmbeddings.length,
         total_needed: 10,
-        feedback: extraction.reason || 'Align your face inside the frame.',
+        feedback: extraction.reason || 'Align your face inside the green guide.',
         pose_correct: false,
+        captured_this_frame: false,
       };
     }
 
-    // Validate Head Pose Alignment
-    const isPoseValid =
-      session.targetPose === 'straight'
-        ? extraction.pose === 'straight' || extraction.pose === 'left' || extraction.pose === 'right' // forgiving straight
-        : extraction.pose === session.targetPose;
+    const now = Date.now();
 
-    // Collect valid embedding
+    // 1. Step Transition Grace Period (give user time to read prompt and turn head)
+    if (now < session.stepTransitionUntil) {
+      const isPoseMatching = extraction.pose === session.targetPose;
+      return {
+        success: true,
+        complete: false,
+        completed: false,
+        step: session.currentStep,
+        total_steps: 3,
+        step_name: session.stepName,
+        target_pose: session.targetPose,
+        needed_in_step: session.neededInStep,
+        captured_in_step: session.capturedInStep,
+        total_captured: session.capturedEmbeddings.length,
+        total_needed: 10,
+        feedback: session.stepTransitionMessage || `Please turn your head slightly to your ${session.targetPose.toUpperCase()}...`,
+        pose_correct: isPoseMatching,
+        captured_this_frame: false,
+      };
+    }
+
+    // 2. Strict Head Pose Alignment Validation
+    let isPoseValid = false;
+    let poseInstruction = '';
+
+    if (session.targetPose === 'straight') {
+      isPoseValid = extraction.pose === 'straight';
+      poseInstruction = 'Please look directly forward at the camera.';
+    } else if (session.targetPose === 'left') {
+      isPoseValid = extraction.pose === 'left';
+      poseInstruction = 'Slowly turn your head slightly to your LEFT (←)';
+    } else if (session.targetPose === 'right') {
+      isPoseValid = extraction.pose === 'right';
+      poseInstruction = 'Slowly turn your head slightly to your RIGHT (→)';
+    }
+
+    if (!isPoseValid) {
+      return {
+        success: true,
+        complete: false,
+        completed: false,
+        step: session.currentStep,
+        total_steps: 3,
+        step_name: session.stepName,
+        target_pose: session.targetPose,
+        needed_in_step: session.neededInStep,
+        captured_in_step: session.capturedInStep,
+        total_captured: session.capturedEmbeddings.length,
+        total_needed: 10,
+        feedback: poseInstruction,
+        pose_correct: false,
+        captured_this_frame: false,
+      };
+    }
+
+    // 3. Human Pacing / Inter-Capture Cooldown
+    // Step 1: 450ms between captures (6 captures ~ 3 seconds)
+    // Step 2 & 3: 700ms between captures (2 captures ~ 1.5 seconds)
+    const requiredCooldown = session.targetPose === 'straight' ? 450 : 700;
+    if (now - session.lastCaptureTime < requiredCooldown) {
+      return {
+        success: true,
+        complete: false,
+        completed: false,
+        step: session.currentStep,
+        total_steps: 3,
+        step_name: session.stepName,
+        target_pose: session.targetPose,
+        needed_in_step: session.neededInStep,
+        captured_in_step: session.capturedInStep,
+        total_captured: session.capturedEmbeddings.length,
+        total_needed: 10,
+        feedback: `Pose Correct! Hold still... (${session.capturedInStep}/${session.neededInStep} captured)`,
+        pose_correct: true,
+        captured_this_frame: false,
+      };
+    }
+
+    // 4. Capture Embedding
+    session.lastCaptureTime = now;
     session.capturedEmbeddings.push(extraction.embedding);
     session.capturedInStep++;
 
     const totalCaptured = session.capturedEmbeddings.length;
 
-    // Advance guided steps
+    // Advance guided steps with grace transitions
     if (session.currentStep === 1 && session.capturedInStep >= 6) {
       session.currentStep = 2;
       session.stepName = 'Turn Slightly Left';
       session.targetPose = 'left';
       session.capturedInStep = 0;
       session.neededInStep = 2;
+      session.stepTransitionUntil = now + 1600; // 1.6s grace time to turn head
+      session.stepTransitionMessage = 'Step 1 Complete! Now turn your head slightly to your LEFT (←)';
     } else if (session.currentStep === 2 && session.capturedInStep >= 2) {
       session.currentStep = 3;
       session.stepName = 'Turn Slightly Right';
       session.targetPose = 'right';
       session.capturedInStep = 0;
       session.neededInStep = 2;
+      session.stepTransitionUntil = now + 1600; // 1.6s grace time to turn head
+      session.stepTransitionMessage = 'Step 2 Complete! Now turn your head slightly to your RIGHT (→)';
     }
 
     // 10 Embeddings Complete! Commit to Cloud Database
     if (totalCaptured >= 10) {
-      activeSessions.delete(sessionId);
+      session.completed = true;
       enrolledEmbeddingsCache.set(session.rollNumber, session.capturedEmbeddings);
 
       // Average the 10 vectors into 1 master biometric profile
@@ -380,8 +520,22 @@ export const faceApiService = {
         await updateStudentAccount(session.rollNumber, { faceRegistered: true });
       } catch (_) {}
 
+      // Retain completed session for 15 seconds to safely absorb any trailing frames
+      setTimeout(() => {
+        activeSessions.delete(sessionId);
+      }, 15000);
+
       return {
+        success: true,
         complete: true,
+        completed: true,
+        captured_this_frame: true,
+        step: 3,
+        total_steps: 3,
+        step_name: 'Registration Complete',
+        target_pose: 'right',
+        needed_in_step: 2,
+        captured_in_step: 2,
         total_captured: 10,
         total_needed: 10,
         feedback: 'Face registration complete! All 10 biometric templates synced to cloud.',
@@ -390,7 +544,10 @@ export const faceApiService = {
     }
 
     return {
+      success: true,
       complete: false,
+      completed: false,
+      captured_this_frame: true,
       step: session.currentStep,
       total_steps: 3,
       step_name: session.stepName,
@@ -399,7 +556,7 @@ export const faceApiService = {
       captured_in_step: session.capturedInStep,
       total_captured: totalCaptured,
       total_needed: 10,
-      feedback: `Hold still (${totalCaptured}/10 captured)...`,
+      feedback: `Pose Correct! Hold still... (${session.capturedInStep}/${session.neededInStep} captured)`,
       pose_correct: true,
     };
   },

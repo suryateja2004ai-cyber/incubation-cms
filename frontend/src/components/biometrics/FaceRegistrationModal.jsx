@@ -411,7 +411,7 @@ export default function FaceRegistrationModal({
         console.log(`[FaceCapture] Embedding accepted! Total: ${res.total_captured}/10 (${res.step_name})`);
       }
 
-      if (res.completed) {
+      if (res.completed || res.complete) {
         console.log('[FaceCapture] ENROLLMENT COMPLETE: 10/10 embeddings saved!');
         isEnrollingRef.current = false;
         setIsEnrolling(false);
@@ -453,7 +453,7 @@ export default function FaceRegistrationModal({
         poseCorrect: Boolean(res.pose_correct),
       }));
     } catch (err) {
-      if (!isEnrollingRef.current) return;
+      if (!isEnrollingRef.current || isComplete) return;
       console.warn('[FaceCapture] Frame transmission error:', err.message);
       if (err.name !== 'AbortError' && !err.message?.includes('aborted') && !err.message?.includes('cancelled')) {
         setCameraError(`Face service communication error: ${err.message}`);
