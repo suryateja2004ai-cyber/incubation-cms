@@ -49,8 +49,6 @@ import ErrorBoundary from '../components/common/ErrorBoundary';
 import QrEntryChoiceModal from '../components/common/QrEntryChoiceModal';
 import { GuidedTourProvider, useGuidedTour } from '../components/tour/GuidedTourContext';
 import GuidedTourHost from '../components/tour/GuidedTourHost';
-import { trafficQueueService } from '../services/traffic/trafficQueueService';
-import TrafficQueueModal from '../components/common/TrafficQueueModal';
 
 export default function App() {
   const [isDbLoaded, setIsDbLoaded] = useState(false);
@@ -85,20 +83,6 @@ export default function App() {
   // QR Code Access Choice Screen ("Install as App" vs "Continue on Web")
   const [showQrChoiceModal, setShowQrChoiceModal] = useState(false);
   const [deferredInstallPrompt, setDeferredInstallPrompt] = useState(null);
-
-  // Peak Traffic Concurrency & Virtual Queue State
-  const [queueState, setQueueState] = useState({ admitted: true, queued: false });
-
-  useEffect(() => {
-    const unsub = trafficQueueService.subscribe((state) => {
-      setQueueState(state);
-    });
-    trafficQueueService.startHeartbeat(currentUser);
-    return () => {
-      unsub();
-      trafficQueueService.stopHeartbeat();
-    };
-  }, [currentUser]);
 
   function addToast(message) {
     const id = Date.now() + Math.random();
@@ -977,18 +961,6 @@ function AuthenticatedAppLayout({
           }
         }}
       />
-
-      {/* VIRTUAL ACCESS QUEUE & HIGH TRAFFIC PROTECTION */}
-      {queueState.queued && !queueState.admitted && (
-        <TrafficQueueModal
-          queueState={queueState}
-          onBypassAdmin={() => {
-            if (currentUser?.role === 'admin' || currentUser?.role === 'substitute_admin' || currentUser?.role === 'sir') {
-              trafficQueueService.checkQueueStatus({ role: 'admin' });
-            }
-          }}
-        />
-      )}
 
       {/* QR CODE ENTRY CHOICE MODAL ("Install as App" vs "Continue on Web") */}
       <QrEntryChoiceModal
