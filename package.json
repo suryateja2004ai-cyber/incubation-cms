@@ -6,6 +6,9 @@
   "workspaces": [
     "frontend"
   ],
+  "dependencies": {
+    "@neondatabase/serverless": "^1.2.1"
+  },
   "scripts": {
     "dev": "npm --prefix frontend run dev",
     "build": "npm --prefix frontend run build",
