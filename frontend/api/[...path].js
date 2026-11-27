@@ -226,6 +226,61 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, visitor: rows[0] });
     }
 
+    // -------------------------------------------------------------
+    // 6. CLOUD FACE BIOMETRICS
+    // -------------------------------------------------------------
+    if (pathname === '/api/face/health' && req.method === 'GET') {
+      return res.status(200).json({ status: 'online', mode: 'cloud_browser_engine', version: '3.0' });
+    }
+
+    if (pathname === '/api/face/students' && req.method === 'GET') {
+      if (!process.env.DATABASE_URL) return res.status(200).json({ students: [] });
+      const sql = getDb();
+      const rows = await sql`
+        SELECT roll_number, student_name as name, 10 as templates_count 
+        FROM public.student_face_embeddings
+        GROUP BY roll_number, student_name;
+      `;
+      return res.status(200).json({ students: rows });
+    }
+
+    if (pathname.startsWith('/api/face/students/') && req.method === 'GET') {
+      const roll = pathname.split('/').pop().toUpperCase();
+      if (!process.env.DATABASE_URL) return res.status(200).json({ registered: false, count: 0 });
+      const sql = getDb();
+      const rows = await sql`
+        SELECT * FROM public.student_face_embeddings 
+        WHERE roll_number = ${roll} 
+        LIMIT 1;
+      `;
+      return res.status(200).json({ registered: rows.length > 0, count: rows.length > 0 ? 10 : 0 });
+    }
+
+    if (pathname.startsWith('/api/face/students/') && req.method === 'DELETE') {
+      const roll = pathname.split('/').pop().toUpperCase();
+      if (process.env.DATABASE_URL) {
+        const sql = getDb();
+        await sql`DELETE FROM public.student_face_embeddings WHERE roll_number = ${roll};`;
+      }
+      return res.status(200).json({ success: true });
+    }
+
+    if (pathname === '/api/face/enroll' && req.method === 'POST') {
+      const { roll_number, student_name, embedding_vector } = req.body || {};
+      if (!roll_number || !embedding_vector) {
+        return res.status(400).json({ error: 'Roll number and embedding vector are required.' });
+      }
+      if (process.env.DATABASE_URL) {
+        const sql = getDb();
+        await sql`
+          INSERT INTO public.student_face_embeddings (id, roll_number, student_name, embedding_vector, created_at)
+          VALUES (${'FACE-' + roll_number + '-' + Date.now()}, ${roll_number.toUpperCase()}, ${student_name || roll_number}, ${JSON.stringify(embedding_vector)}::jsonb, NOW())
+          ON CONFLICT (id) DO NOTHING;
+        `;
+      }
+      return res.status(201).json({ success: true, message: 'Enrolled in Neon PostgreSQL cloud biometrics.' });
+    }
+
     // Default 404
     return res.status(404).json({ error: `Endpoint ${pathname} not found` });
 

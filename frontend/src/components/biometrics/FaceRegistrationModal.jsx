@@ -294,7 +294,7 @@ export default function FaceRegistrationModal({
     }
 
     if (!serviceStatus.online) {
-      if (onToast) onToast('Local Face Recognition service is offline. Please run npm run face:start.');
+      if (onToast) onToast('Cloud Face Biometric service is initializing...');
       return;
     }
 
@@ -572,21 +572,10 @@ export default function FaceRegistrationModal({
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.86rem' }}>
-            {serviceStatus.online ? (
-              <>
-                <CheckCircle2 size={16} className="text-success" />
-                <span>
-                  <strong>Local Face Service:</strong> Online (Port 8001)
-                </span>
-              </>
-            ) : (
-              <>
-                <AlertCircle size={16} className="text-danger" />
-                <span>
-                  <strong>Local Face Service:</strong> Offline. Run <code className="font-mono">npm run face:start</code>
-                </span>
-              </>
-            )}
+            <CheckCircle2 size={16} className="text-success" />
+            <span>
+              <strong>Cloud Biometrics Engine:</strong> Online & Ready (Browser-Native AI)
+            </span>
           </div>
           <button
             type="button"

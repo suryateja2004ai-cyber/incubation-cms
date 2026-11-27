@@ -23,6 +23,7 @@ import {
   subscribeStaffPresenceRealtime,
   subscribeToDb,
 } from '../../db/database';
+import VrsecHandLogo from '../common/VrsecHandLogo';
 
 export default function Navbar({
   stats,
@@ -125,6 +126,9 @@ export default function Navbar({
         >
           <Menu size={22} />
         </button>
+        <div style={{ display: 'flex', alignItems: 'center', marginRight: '0.5rem' }}>
+          <VrsecHandLogo size={34} />
+        </div>
         <div className="navbar-brand-badge">
           VRSEC
         </div>

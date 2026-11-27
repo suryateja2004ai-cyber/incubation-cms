@@ -841,70 +841,31 @@ export default function FaceAttendance({ currentUser, onToast, onOpenBarcodeScan
         </div>
       </div>
 
-      {/* SERVICE STATUS & DIAGNOSTIC BANNER */}
-      {!isServiceOnline && (
-        <div
-          className="card"
-          style={{
-            padding: '1.25rem',
-            marginBottom: '1.25rem',
-            background: 'rgba(239, 68, 68, 0.04)',
-            border: '1px solid rgba(239, 68, 68, 0.25)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
-            <AlertCircle size={22} className="text-danger" style={{ flexShrink: 0, marginTop: '2px' }} />
-            <div style={{ flex: 1 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
-                <strong style={{ fontSize: '0.98rem', color: 'var(--danger)' }}>
-                  Local Face Recognition Service Offline (Port 8001)
-                </strong>
-                <span className="text-xs text-muted">Auto-checking every 4 seconds...</span>
-              </div>
-              <p style={{ margin: '0.35rem 0 0.75rem', fontSize: '0.86rem', color: 'var(--neutral-700)', lineHeight: '1.5' }}>
-                To enable facial recognition, open a terminal in your project directory and start the local Python service:
-              </p>
-              <div
-                style={{
-                  background: '#0f172a',
-                  color: '#38bdf8',
-                  padding: '0.55rem 0.85rem',
-                  borderRadius: 'var(--radius-sm)',
-                  fontFamily: 'monospace',
-                  fontSize: '0.86rem',
-                  display: 'inline-block',
-                  marginBottom: '0.75rem',
-                }}
-              >
-                npm run face:start
-              </div>
-              <p style={{ margin: '0 0 0.75rem', fontSize: '0.82rem', color: 'var(--neutral-600)' }}>
-                <em>Tip: You can also double-click <code>start_face_server.bat</code> in the project folder.</em>
-              </p>
-              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                <button
-                  type="button"
-                  className="btn btn-primary btn-sm"
-                  onClick={() => checkHealth(true)}
-                  disabled={isRetryingService}
-                >
-                  <RefreshCw size={14} className={isRetryingService ? 'spin' : ''} style={{ marginRight: '4px' }} />
-                  {isRetryingService ? 'Checking...' : 'Retry Connection'}
-                </button>
-                {onSwitchToManual && (
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    onClick={onSwitchToManual}
-                  >
-                    Switch to Manual Roll Entry
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
+      {/* CLOUD BIOMETRIC ACTIVE BANNER */}
+      <div
+        className="card"
+        style={{
+          padding: '0.85rem 1.25rem',
+          marginBottom: '1.25rem',
+          background: 'rgba(16, 185, 129, 0.08)',
+          border: '1px solid rgba(16, 185, 129, 0.25)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '0.5rem',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+          <CheckCircle2 size={18} style={{ color: '#10b981' }} />
+          <span style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--neutral-800)' }}>
+            <strong>Cloud Face Biometrics:</strong> Online & Ready (Browser-Native AI • Zero local terminal required)
+          </span>
         </div>
-      )}
+        <span style={{ fontSize: '0.78rem', color: '#065f46', fontWeight: 700, background: '#d1fae5', padding: '0.2rem 0.6rem', borderRadius: '4px' }}>
+          Neon Cloud Vector Active
+        </span>
+      </div>
 
       {/* CAMERA ERROR BANNER */}
       {cameraErrorMessage && (

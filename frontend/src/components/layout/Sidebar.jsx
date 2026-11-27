@@ -15,6 +15,7 @@ import {
   Settings,
   X,
   WifiOff,
+  Cloud,
   Sliders,
   BarChart3,
   FileText,
@@ -29,6 +30,7 @@ import {
   Camera,
   HelpCircle,
 } from 'lucide-react';
+import VrsecHandLogo from '../common/VrsecHandLogo';
 
 export default function Sidebar({
   currentUser,
@@ -307,7 +309,9 @@ export default function Sidebar({
 
       <aside className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-header">
-          <div className="sidebar-logo-icon">⚡</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <VrsecHandLogo size={38} />
+          </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <h2
               style={{
@@ -331,8 +335,8 @@ export default function Sidebar({
                 fontWeight: 600,
               }}
             >
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--success)' }}></span>
-              Offline Ready
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#10b981', boxShadow: '0 0 6px #10b981' }}></span>
+              Online
             </div>
           </div>
           <button
@@ -651,8 +655,8 @@ export default function Sidebar({
                 </div>
               </div>
             </div>
-            <span title="Offline Database Persistent">
-              <WifiOff size={16} style={{ color: 'var(--neutral-400)' }} />
+            <span title="Neon Cloud PostgreSQL Database Active" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: '#10b981' }}>
+              <Cloud size={16} />
             </span>
           </div>
         </div>

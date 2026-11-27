@@ -23,6 +23,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { loginUser } from '../../db/database';
+import VrsecHandLogo from '../../components/common/VrsecHandLogo';
 
 export default function Login({ onLogin, onOpenEntranceStation, centreName = 'Incubation Centre' }) {
   const [identifier, setIdentifier] = useState('');
@@ -198,19 +199,16 @@ export default function Login({ onLogin, onOpenEntranceStation, centreName = 'In
         >
           <div
             style={{
-              width: 60,
-              height: 60,
-              background: 'rgba(255, 255, 255, 0.15)',
-              backdropFilter: 'blur(4px)',
-              borderRadius: 'var(--radius-lg)',
+              width: 64,
+              height: 64,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               margin: '0 auto 1rem',
-              border: '1px solid rgba(255, 255, 255, 0.25)',
+              filter: 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.25))',
             }}
           >
-            <Cpu size={32} />
+            <VrsecHandLogo size={60} />
           </div>
           <h2 style={{ fontSize: '1.45rem', fontWeight: 800, letterSpacing: '-0.5px' }}>
             Incubation-CMS
