@@ -34,19 +34,40 @@ export default async function handler(req, res) {
         );
       `;
 
-      // 2. Resolve real student name from passwords table if not provided
+      // 2. Resolve real student name from passwords table or auto-provision account
+      const userRows = await sql`
+        SELECT student_name FROM public.passwords 
+        WHERE UPPER(TRIM(roll_number)) = ${cleanRoll} 
+        LIMIT 1;
+      `;
       let resolvedName = student_name;
-      if (!resolvedName) {
-        const userRows = await sql`
-          SELECT student_name FROM public.passwords 
-          WHERE UPPER(TRIM(roll_number)) = ${cleanRoll} 
-          LIMIT 1;
+      if (userRows && userRows.length > 0 && userRows[0].student_name) {
+        resolvedName = userRows[0].student_name;
+      } else {
+        if (!resolvedName) resolvedName = `Student ${cleanRoll}`;
+        await sql`
+          INSERT INTO public.passwords (
+            roll_number, password, student_name, role, department, 
+            phone_number, created_at, updated_at, academic_year_at_start, 
+            incubation_start_date, retention_period_years, retention_end_date
+          ) VALUES (
+            ${cleanRoll},
+            'student123',
+            ${resolvedName},
+            'student',
+            'ECE',
+            '9876543210',
+            NOW(),
+            NOW(),
+            1,
+            NOW(),
+            4,
+            NOW() + INTERVAL '4 years'
+          )
+          ON CONFLICT (roll_number) DO UPDATE SET
+            student_name = COALESCE(EXCLUDED.student_name, public.passwords.student_name);
         `;
-        if (userRows && userRows.length > 0) {
-          resolvedName = userRows[0].student_name;
-        }
       }
-      if (!resolvedName) resolvedName = cleanRoll;
 
       // 3. Upsert face embedding
       const recordId = 'FACE-' + cleanRoll;

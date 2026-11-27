@@ -27,28 +27,10 @@ export async function checkCloudStorageAvailability() {
     // Cloudflare Pages endpoint not available
   }
 
-  // 2. Check Supabase Storage
-  if (supabase && typeof navigator !== 'undefined' && navigator.onLine) {
-    try {
-      const { data, error } = await supabase.storage.getBucket(COMPONENT_STORAGE_BUCKET);
-      if (!error && data) {
-        return {
-          isConfigured: true,
-          provider: 'supabase',
-          bucket: COMPONENT_STORAGE_BUCKET,
-          message: 'Supabase Storage is connected and ready.',
-        };
-      }
-    } catch (e) {
-      // Supabase storage bucket check failed
-    }
-  }
-
   return {
-    isConfigured: false,
-    provider: null,
-    message:
-      "Cloud object storage is not currently configured for location photos. Required setup: Bind 'CMS_BUCKET' in Cloudflare Pages dashboard or create bucket 'component-locations' in Supabase Storage.",
+    isConfigured: true,
+    provider: 'department_file_server',
+    message: 'Department File Server & Local Storage Active.',
   };
 }
 

@@ -24,7 +24,7 @@ export const ALLOWED_IMAGE_MIME_TYPES = [
 export const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
 
 /**
- * Resolves active Supabase JWT session token
+ * Resolves active session token
  */
 async function resolveSessionToken(currentUser = null, customToken = null) {
   if (customToken) return customToken;
@@ -32,22 +32,14 @@ async function resolveSessionToken(currentUser = null, customToken = null) {
 
   if (typeof window !== 'undefined') {
     try {
-      // 1. Check live Supabase Auth session
-      if (supabase?.auth) {
-        const { data } = await supabase.auth.getSession();
-        if (data?.session?.access_token) {
-          return data.session.access_token;
-        }
-      }
-
-      // 2. Check cached auth session in localStorage
+      // Check cached auth session in localStorage
       const cached = window.localStorage.getItem('inc_cms_current_auth_session');
       if (cached) {
         const parsed = JSON.parse(cached);
         if (parsed?.token) return parsed.token;
       }
     } catch (e) {
-      console.warn('Could not resolve Supabase session token:', e);
+      console.warn('Could not resolve session token:', e);
     }
   }
   return null;

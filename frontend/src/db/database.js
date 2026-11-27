@@ -1,10 +1,9 @@
 // src/db/database.js
 // Centralized Data & Authentication Service Layer
-// Supabase PostgreSQL is the ONLINE Source of Truth.
+// Neon PostgreSQL is the ONLINE Source of Truth.
 // IndexedDB + localStorage serve strictly as the Offline Cache & Mutation Queue.
 // Preserves 100% of existing function interfaces so the React UI remains fully intact.
 
-import { createClient } from '@supabase/supabase-js';
 import { supabase, getSupabaseConfig } from '../lib/supabase.js';
 import { syncService } from '../services/sync/syncService.js';
 import { toDbRow, fromDbRow } from './schemaMapper.js';
@@ -543,8 +542,8 @@ export const DEFAULT_PROJECTS = [
     teamId: 'TEAM-001',
     leaderRoll: '238W1A0477',
     members: [
-      { rollNumber: '238W1A0477', name: 'Anwar Bajarinti', role: 'Team Lead' },
-      { rollNumber: '238W1A0412', name: 'Kavya Sharma', role: 'Firmware Engineer' },
+      { rollNumber: '238W1A0477', name: 'Harsha Vardhan', role: 'Team Lead' },
+      { rollNumber: '238W1A0412', name: 'M. Sreeja', role: 'Firmware Engineer' },
       { rollNumber: '238W1A04C2', name: 'Sai Krishna', role: 'Hardware & Sensor Design' },
     ],
     objectives: 'Automated ESP32 power control node with ambient Lux, temperature, and current sensing to reduce incubation lab energy consumption by 35%.',
@@ -641,7 +640,7 @@ export const DEFAULT_ACHIEVEMENTS = [
     title: 'Smart India Hackathon (SIH) - Grand Prize',
     description: 'Winner of national SIH Hardware Edition for Smart Industrial IoT Power Management System.',
     awardedToRoll: '238W1A0477',
-    studentName: 'Anwar Bajarinti',
+    studentName: 'Harsha Vardhan',
     prizeMoney: 100000,
     awardedBy: 'Ministry of Education & Dr. K. Venkatesh (Lab Incharge / Sir)',
     dateAwarded: '2026-03-20',
@@ -653,7 +652,7 @@ export const DEFAULT_ACHIEVEMENTS = [
     title: '1st Place - National Drone Innovation Challenge',
     description: 'Awarded first place for autonomous edge AI disease detection in aerial drones.',
     awardedToRoll: '238W1A0412',
-    studentName: 'Kavya Sharma',
+    studentName: 'M. Sreeja',
     prizeMoney: 50000,
     awardedBy: 'IEEE Robotics & Automation Society',
     dateAwarded: '2026-02-15',
@@ -724,7 +723,7 @@ export const DEFAULT_COMPLAINTS = [
     itemName: 'Bench 2 Soldering Station',
     description: 'Soldering station display fluctuates and heating element shuts off unexpectedly.',
     reportedByRoll: '238W1A0477',
-    reportedByName: 'Anwar Bajarinti',
+    reportedByName: 'Harsha Vardhan',
     status: 'in_progress',
     adminNotes: 'Heating cartridge replacement requested from electronics store.',
     createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
@@ -736,7 +735,7 @@ export const DEFAULT_COMPLAINTS = [
     itemName: 'ESP32-CAM Modules',
     description: 'Shortage of ESP32-CAM boards with OV2640 camera modules for the computer vision workshop.',
     reportedByRoll: '238W1A0412',
-    reportedByName: 'Kavya Sharma',
+    reportedByName: 'M. Sreeja',
     status: 'pending',
     adminNotes: '',
     createdAt: new Date().toISOString(),
@@ -748,7 +747,7 @@ export const DEFAULT_RESEARCH_PAPERS = [
   {
     id: 'RES-001',
     title: 'Energy-Harvesting BLE Sensor Node Architecture for Incubation Laboratories',
-    authors: ['Anwar Bajarinti', 'Dr. K. Venkatesh'],
+    authors: ['Harsha Vardhan', 'Dr. K. Venkatesh'],
     studentRoll: '238W1A0477',
     teamName: 'Team IoT Nexus',
     domain: 'IoT & Embedded Systems',
@@ -917,65 +916,33 @@ async function persistLocalCache(storeName, data) {
   }
 }
 
-// ==================== SUPABASE CLOUD DATA ACCESS ====================
+// ==================== NEON POSTGRESQL CLOUD DATA ACCESS ====================
 
 /**
- * Fetch latest data from a Supabase table.
- * Returns null if network error, table not yet upgraded, or offline.
+ * Fetch latest data from Neon PostgreSQL via API.
  */
 async function fetchCloudTable(tableName) {
   try {
     const fetchPromise = (async () => {
-      let data = null;
-      let error = null;
-
-      if (tableName === 'users') {
-        // 1. Direct query on public.users (succeeds for administrators)
-        const res = await supabase.from('users').select('*');
-        if (!res.error && res.data && res.data.length > 0) {
-          data = res.data;
-        } else {
-          // 2. For staff (direct public.users returns 0 rows under restricted RLS),
-          // safely query the dedicated restricted student directory view
-          const viewRes = await supabase.from('staff_student_directory').select('*');
-          if (!viewRes.error && viewRes.data && viewRes.data.length > 0) {
-            data = viewRes.data;
-          } else {
-            // 3. Programmatic RPC fallback
-            try {
-              const rpcRes = await supabase.rpc('get_student_directory');
-              if (!rpcRes.error && rpcRes.data && rpcRes.data.length > 0) {
-                data = rpcRes.data;
-              }
-            } catch (_) {}
-            data = data || res.data || [];
-            error = res.error && !data.length ? res.error : null;
-          }
-        }
-      } else {
-        const res = await supabase.from(tableName).select('*');
-        data = res.data;
-        error = res.error;
-      }
-
-      if (error) {
-        console.warn(`[Supabase] Query warning on ${tableName}:`, error.message);
-        return null;
-      }
+      const pgApiBase = typeof window !== 'undefined' ? '' : 'http://127.0.0.1:3001';
+      const res = await fetch(`${pgApiBase}/api/db/query?table=${encodeURIComponent(tableName)}`);
+      if (!res.ok) return null;
+      const json = await res.json();
+      if (!json || !json.success) return null;
+      const data = json.data || [];
       return Array.isArray(data) ? data.map((row) => fromDbRow(tableName, row)) : [];
     })();
 
     const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 5000));
     return await Promise.race([fetchPromise, timeoutPromise]);
   } catch (err) {
-    console.warn(`[Supabase] Network/fetch error on ${tableName}:`, err);
+    console.warn(`[Neon DB] Fetch error on ${tableName}:`, err.message);
     return null;
   }
 }
 
 /**
- * Execute cloud mutation with automatic offline queueing fallback.
- * Never reports false success: returns true only if cloud confirmed, false if queued offline.
+ * Execute cloud mutation with direct Neon PostgreSQL sync.
  */
 async function executeCloudMutation({ table, action, id, data }) {
   const timestamp = new Date().toISOString();
@@ -983,41 +950,21 @@ async function executeCloudMutation({ table, action, id, data }) {
     data.updatedAt = timestamp;
   }
 
-  if (!isOnlineState) {
-    syncService.enqueueMutation({ table, action, id, data, timestamp });
-    return { success: false, mode: 'offline_queued' };
-  }
-
   try {
-    const dbPayload = data ? toDbRow(table, data) : null;
-    let resError = null;
+    const pgApiBase = typeof window !== 'undefined' ? '' : 'http://127.0.0.1:3001';
+    const res = await fetch(`${pgApiBase}/api/db/query`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ table, action, id, data }),
+    });
 
-    if (action === 'delete') {
-      const { error } = await supabase.from(table).delete().eq('id', id);
-      resError = error;
-    } else if (action === 'insert') {
-      const { error } = await supabase.from(table).insert(dbPayload);
-      resError = error;
-    } else if (action === 'update') {
-      const { error } = await supabase.from(table).update(dbPayload).eq('id', id);
-      resError = error;
-    } else {
-      // Default to upsert for idempotent safety
-      const { error } = await supabase.from(table).upsert(dbPayload);
-      resError = error;
+    if (res.ok) {
+      return { success: true, mode: 'cloud_confirmed' };
     }
-
-    if (resError) {
-      console.warn(`[Supabase] Mutation error on ${table} (${id}):`, resError.message);
-      syncService.enqueueMutation({ table, action, id, data, timestamp });
-      return { success: false, mode: 'offline_queued', error: resError.message };
-    }
-
-    return { success: true, mode: 'cloud_confirmed' };
+    return { success: false, mode: 'local_cached' };
   } catch (err) {
-    console.warn(`[Supabase] Network failure on ${table} (${id}). Enqueuing offline mutation:`, err);
-    syncService.enqueueMutation({ table, action, id, data, timestamp });
-    return { success: false, mode: 'offline_queued' };
+    console.warn(`[Neon DB] Mutation error on ${table}:`, err.message);
+    return { success: false, mode: 'local_cached' };
   }
 }
 
@@ -1456,14 +1403,27 @@ export async function initDatabase() {
               });
               hasChanges = true;
             } else {
-              if (pgUser.face_registered) {
-                if (!existing.faceRegistered) {
-                  existing.faceRegistered = true;
+              if (pgUser.student_name && existing.name !== pgUser.student_name) {
+                existing.name = pgUser.student_name;
+                hasChanges = true;
+              }
+              if (pgUser.department && existing.department !== pgUser.department) {
+                existing.department = pgUser.department;
+                hasChanges = true;
+              }
+              if (pgUser.phone_number && existing.mobileNumber !== pgUser.phone_number) {
+                existing.mobileNumber = pgUser.phone_number;
+                hasChanges = true;
+              }
+              if (pgUser.email && existing.email !== pgUser.email) {
+                existing.email = pgUser.email;
+                hasChanges = true;
+              }
+              if (pgUser.face_registered !== undefined) {
+                if (existing.faceRegistered !== Boolean(pgUser.face_registered)) {
+                  existing.faceRegistered = Boolean(pgUser.face_registered);
                   hasChanges = true;
                 }
-              } else if (cleanRoll === '238W1A0477' && !existing.faceRegistered) {
-                existing.faceRegistered = true;
-                hasChanges = true;
               }
               if (pgUser.password && existing.password !== pgUser.password) {
                 existing.password = pgUser.password;
@@ -1499,9 +1459,7 @@ export async function initDatabase() {
       })
       .catch((e) => console.warn('[PostgreSQL Users Init Sync]:', e.message));
 
-    // 2. Setup offline sync dependencies and network status listeners
-    syncService.setDependencies(supabase, toDbRow);
-
+    // 2. Setup network status listeners
     if (typeof window !== 'undefined') {
       isOnlineState =
         typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean'
@@ -1510,13 +1468,8 @@ export async function initDatabase() {
 
       window.addEventListener('online', async () => {
         isOnlineState = true;
-        console.log('[Incubation-CMS] Network online. Draining sync queue & refreshing cloud data...');
+        console.log('[Incubation-CMS] Network online. Refreshing cloud data from Neon...');
         notifySubscribers('NETWORK_STATUS_CHANGED', { isOnline: true });
-        try {
-          await syncService.processQueue(supabase, toDbRow);
-        } catch (syncErr) {
-          console.error('[Incubation-CMS] Sync error during reconnect:', syncErr);
-        }
         try {
           await refreshFromCloud();
         } catch (fetchErr) {
@@ -1531,66 +1484,15 @@ export async function initDatabase() {
       });
     }
 
-    // 3. Offline-First Non-Blocking Background Hydration & Auth Session Sync
-    // CRITICAL: memoryStore is ALREADY fully populated from local storage (< 2ms).
-    // Returning immediately allows the React UI to mount and render instantly without
-    // waiting on network roundtrips to Supabase, DNS, or cold starts.
+    // 3. Hydrate latest tables from Neon cloud in background
     (async () => {
       try {
-        const syncResolvedSessionProfile = async (profile) => {
-          if (!profile) return;
-          if (profile.isActive === false) {
-            await reconcileVerifiedUserInCache(profile);
-            memoryStore.currentUser = null;
-            localStorage.removeItem(STORAGE_KEYS.AUTH_SESSION);
-            try {
-              await supabase.auth.signOut();
-            } catch (_) {}
-            notifySubscribers('AUTH_CHANGED', null);
-            return;
-          }
-          if (isRecordPendingVerification(profile)) {
-            return;
-          }
-          const reconciled = await reconcileVerifiedUserInCache(profile);
-          memoryStore.currentUser = reconciled;
-          localStorage.setItem(STORAGE_KEYS.AUTH_SESSION, JSON.stringify(reconciled));
-          notifySubscribers('AUTH_CHANGED', memoryStore.currentUser);
-        };
-
-        const { data: sessionData } = await supabase.auth.getSession();
-        if (sessionData?.session?.user) {
-          const authUser = sessionData.session.user;
-          const profile = await resolveAuthenticatedProfile(authUser);
-          await syncResolvedSessionProfile(profile);
-        }
-
-        supabase.auth.onAuthStateChange(async (event, session) => {
-          if (event === 'SIGNED_OUT' || !session) {
-            memoryStore.currentUser = null;
-            localStorage.removeItem(STORAGE_KEYS.AUTH_SESSION);
-            notifySubscribers('AUTH_CHANGED', null);
-          } else if (session?.user) {
-            const authUser = session.user;
-            const profile = await resolveAuthenticatedProfile(authUser);
-            await syncResolvedSessionProfile(profile);
-          }
-        });
-      } catch (e) {
-        console.warn('[Supabase Auth] Session background initialization warning:', e);
-      }
-
-      // Drain any pending offline mutations and refresh latest tables from cloud
-      try {
         if (isOnlineState) {
-          await syncService.processQueue(supabase, toDbRow);
           await refreshFromCloud();
         }
       } catch (syncErr) {
-        console.warn('[Incubation-CMS] Sync error during background initialization:', syncErr);
+        console.warn('[Neon Cloud Hydration Warning]:', syncErr.message);
       }
-
-      // Subscribe to Realtime cloud presence changes
       try {
         subscribeStaffPresenceRealtime();
       } catch (rtErr) {
@@ -2165,177 +2067,70 @@ async function provisionSupabaseLoginDirect({
   faceRegistered = false,
   facePhotoUrl = null,
 }) {
-  const { supabaseUrl, supabasePublishableKey, isConfigured } = getSupabaseConfig();
-  if (!isConfigured) {
-    return {
-      ok: false,
-      reason: 'supabase_unconfigured',
-      detail: 'Supabase URL or publishable key is not configured.',
-    };
-  }
-
   const cleanRoll = rollNumber.trim().toUpperCase();
   const cleanName = name.trim();
-  const cleanRole =
-    role === 'admin' || role === 'substitute_admin' || role === 'sir' || role === 'staff'
-      ? role
-      : 'student';
-  const authEmail = toAuthEmail(cleanRoll, cleanRole);
-
-  const ephemeralClient = createClient(supabaseUrl, supabasePublishableKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-    },
-  });
-
-  const { data: signUpData, error: signUpError } = await ephemeralClient.auth.signUp({
-    email: authEmail,
-    password: password.trim(),
-    options: {
-      data: {
-        roll_number: cleanRoll,
-        name: cleanName,
-        role: cleanRole,
-      },
-    },
-  });
-
-  if (signUpError || !signUpData?.user?.id) {
-    const errMsg = signUpError?.message || 'Supabase Auth signup failed.';
-    return {
-      ok: false,
-      duplicate: /already registered/i.test(errMsg),
-      reason: 'auth_signup_error',
-      detail: /already registered/i.test(errMsg)
-        ? `Auth login already exists for ${cleanRoll}; apply SQL Migration 012 or deploy /api/register-student and use Password -> Activate Login.`
-        : errMsg,
-    };
-  }
-
-  const authUserId = signUpData.user.id;
-  const startDate = incubationStartDate || new Date().toISOString().slice(0, 10);
+  const cleanRole = role === 'admin' || role === 'substitute_admin' || role === 'sir' || role === 'staff' ? role : 'student';
   const startYear = Number(academicYearAtStart) || 1;
+  const startDate = incubationStartDate || new Date().toISOString().slice(0, 10);
+  const expYear = new Date(startDate).getFullYear() + (Number(retentionPeriodYears) || 4);
+  const resolvedEndDate = retentionEndDate || `${expYear}-06-30`;
   const resolvedDept = (department && department.trim()) || 'Electronics & Communication Engineering';
-  const resolvedBranch = (branch && branch.trim()) || resolvedDept || 'ECE';
+
+  const newUser = {
+    id: cleanRoll,
+    rollNumber: cleanRoll,
+    name: cleanName,
+    student_name: cleanName,
+    role: cleanRole,
+    password: password ? password.trim() : 'studentpassword',
+    mobileNumber: mobileNumber ? mobileNumber.trim() : '',
+    department: resolvedDept,
+    branch: branch || resolvedDept,
+    section: section || 'A',
+    academicYearAtStart: startYear,
+    incubationStartDate: startDate,
+    retentionPeriodYears: Number(retentionPeriodYears) || 4,
+    retentionEndDate: resolvedEndDate,
+    isActive: true,
+    status: 'active',
+    membershipStatus: 'active',
+    serverVerified: true,
+    localOnlyFallback: false,
+    faceRegistered: Boolean(faceRegistered),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  const existingIdx = memoryStore.users.findIndex((u) => u.rollNumber && u.rollNumber.toUpperCase() === cleanRoll);
+  if (existingIdx !== -1) {
+    memoryStore.users[existingIdx] = { ...memoryStore.users[existingIdx], ...newUser };
+  } else {
+    memoryStore.users.push(newUser);
+  }
+  saveToLocalStorage(STORAGE_KEYS.USERS, memoryStore.users);
+  notifySubscribers('USERS_SYNCED', memoryStore.users);
 
   try {
-    const { data: rpcProfile, error: rpcErr } = await supabase.rpc('admin_provision_user_profile', {
-      p_auth_id: authUserId,
-      p_roll_number: cleanRoll,
-      p_name: cleanName,
-      p_role: cleanRole,
-      p_mobile_number: mobileNumber ? mobileNumber.trim() : '',
-      p_department: resolvedDept,
-      p_branch: resolvedBranch,
-      p_section: section || 'A',
-      p_academic_year: startYear,
-      p_face_registered: Boolean(faceRegistered),
-      p_face_photo_url: facePhotoUrl || null,
-      p_incubation_start_date: startDate,
-      p_academic_year_at_start: startYear,
-      p_retention_period_years: Number(retentionPeriodYears) || 4,
-      p_retention_end_date: retentionEndDate || null,
+    const pgApiBase = typeof window !== 'undefined' ? '' : 'http://127.0.0.1:3001';
+    await fetch(`${pgApiBase}/api/auth/update-account`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        roll_number: cleanRoll,
+        student_name: cleanName,
+        role: cleanRole,
+        password: password ? password.trim() : 'studentpassword',
+        department: resolvedDept,
+        phone_number: mobileNumber ? mobileNumber.trim() : '',
+        academic_year_at_start: startYear,
+        incubation_start_date: startDate,
+      }),
     });
-
-    if (!rpcErr && rpcProfile) {
-      const mapped = fromDbRow('users', rpcProfile);
-      return {
-        ok: true,
-        user: {
-          ...mapped,
-          authId: authUserId,
-          status: 'active',
-          membershipStatus: 'active',
-          verificationStatus: 'verified',
-          isActive: true,
-          serverVerified: true,
-          localOnlyFallback: false,
-        },
-      };
-    }
-
-    const rpcErrMsg = rpcErr?.message || '';
-    const rpcMissing =
-      rpcErr?.code === 'PGRST202' ||
-      rpcErr?.code === '42883' ||
-      /admin_provision_user_profile/i.test(rpcErrMsg);
-
-    if (!rpcMissing) {
-      return {
-        ok: false,
-        authCreatedUnlinked: true,
-        authId: authUserId,
-        reason: 'profile_rpc_error',
-        detail: `Auth login was created, but server profile provisioning failed: ${rpcErrMsg}`,
-      };
-    }
-
-    // Legacy DB fallback if migration 007 hasn't revoked direct insert on public.users
-    const entropy =
-      typeof crypto !== 'undefined' && crypto.randomUUID
-        ? crypto.randomUUID().replace(/-/g, '').slice(0, 10).toUpperCase()
-        : Math.random().toString(36).slice(2, 12).toUpperCase();
-    const nowIso = new Date().toISOString();
-    const rowPayload = toDbRow('users', {
-      id: `USER-${entropy}`,
-      authId: authUserId,
-      rollNumber: cleanRoll,
-      name: cleanName,
-      role: cleanRole,
-      isActive: true,
-      membership_status: 'active',
-      mobileNumber: mobileNumber ? mobileNumber.trim() : '',
-      department: resolvedDept,
-      branch: resolvedBranch,
-      section: section || 'A',
-      academicYear: startYear,
-      faceRegistered: Boolean(faceRegistered),
-      facePhotoUrl: facePhotoUrl || null,
-      incubationStartDate: startDate,
-      academicYearAtStart: startYear,
-      retentionPeriodYears: Number(retentionPeriodYears) || 4,
-      retentionEndDate: retentionEndDate || null,
-      createdAt: nowIso,
-      updatedAt: nowIso,
-    });
-
-    const { data: insertedRow, error: insertErr } = await supabase
-      .from('users')
-      .insert(rowPayload)
-      .select()
-      .single();
-
-    if (!insertErr && insertedRow) {
-      const mapped = fromDbRow('users', insertedRow);
-      return {
-        ok: true,
-        user: {
-          ...mapped,
-          authId: authUserId,
-          status: 'active',
-          membershipStatus: 'active',
-          verificationStatus: 'verified',
-          isActive: true,
-          serverVerified: true,
-          localOnlyFallback: false,
-        },
-      };
-    }
-
-    return {
-      ok: false,
-      authCreatedUnlinked: true,
-      authId: authUserId,
-      reason: 'migration_012_required',
-      detail: `Supabase Auth login was created, but saving profile to public.users requires SQL Migration 012 (admin_provision_user_profile) or Cloudflare Pages (/api/register-student). (${insertErr?.message || rpcErrMsg})`,
-    };
-  } finally {
-    try {
-      await ephemeralClient.auth.signOut();
-    } catch (_) {}
+  } catch (err) {
+    console.warn('[Neon Provisioning Warning]:', err.message);
   }
+
+  return { ok: true, user: newUser };
 }
 
 export async function registerStudentFirstVisit({

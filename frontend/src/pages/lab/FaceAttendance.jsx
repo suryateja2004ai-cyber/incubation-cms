@@ -190,10 +190,13 @@ export default function FaceAttendance({ currentUser, onToast, onOpenBarcodeScan
 
     const events = todayVisits.map((v) => {
       const isInside = v.status === 'inside' && !v.exitTime;
+      const cleanRoll = String(v.studentRoll || '').trim().toUpperCase();
+      const authUser = getUserByRoll(cleanRoll);
+      const studentName = authUser?.name || v.studentName || `Student ${cleanRoll}`;
       return {
         id: v.id,
-        rollNumber: v.studentRoll,
-        studentName: v.studentName,
+        rollNumber: cleanRoll,
+        studentName,
         type: isInside ? 'entry' : 'exit',
         isInside,
         status: v.status,

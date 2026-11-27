@@ -1431,7 +1431,7 @@ export default function Students({
                       ) : (
                         <>
                           {registrationSuccessUser.name} ({registrationSuccessUser.rollNumber}) with role{' '}
-                          <strong>{registrationSuccessUser.role || 'student'}</strong> was saved locally only and is NOT verified on Supabase yet. Normal student login is blocked until server registration/verification completes.
+                          <strong>{registrationSuccessUser.role || 'student'}</strong> was saved locally only and is NOT verified in the database yet. Normal student login is blocked until server registration/verification completes.
                           {registrationSuccessUser.fallbackDetail ? ` (${registrationSuccessUser.fallbackDetail})` : ''}
                         </>
                       )}

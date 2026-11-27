@@ -69,11 +69,21 @@ export default async function handler(req, res) {
       WHERE UPPER(TRIM(roll_number)) = '238W1A0481';
     `;
 
-    // 4. Correct student_name in issued_components transactions
+    // 4. Correct student_name in issued_components, projects, and research_publications
     await sql`
       UPDATE public.issued_components
       SET student_name = 'Harsha Vardhan', updated_at = NOW()
       WHERE UPPER(TRIM(registration_number)) = '238W1A0477';
+    `;
+    await sql`
+      UPDATE public.projects
+      SET student_name = 'Harsha Vardhan', updated_at = NOW()
+      WHERE UPPER(TRIM(student_roll)) = '238W1A0477';
+    `;
+    await sql`
+      UPDATE public.research_publications
+      SET student_name = 'Harsha Vardhan', updated_at = NOW()
+      WHERE UPPER(TRIM(student_roll)) = '238W1A0477';
     `;
 
     // 5. Query updated passwords and face embeddings to verify

@@ -54,7 +54,7 @@ CREATE INDEX IF NOT EXISTS idx_achievements_student ON public.achievements (awar
 -- Seed Initial Honors & Hackathon Wins
 INSERT INTO public.achievements (id, title, description, awarded_to_roll, student_name, prize_money, awarded_by, date_awarded, is_permanent, created_at)
 VALUES
-  ('ACH-001', 'Smart India Hackathon (SIH) - Grand Prize', 'Winner of national SIH Hardware Edition for Smart Industrial IoT Power Management System.', '238W1A0477', 'Anwar Bajarinti', 100000.00, 'Ministry of Education & Dr. K. Venkatesh (Lab Incharge / Sir)', '2026-03-20', true, '2026-03-20 10:00:00+05:30'),
+  ('ACH-001', 'Smart India Hackathon (SIH) - Grand Prize', 'Winner of national SIH Hardware Edition for Smart Industrial IoT Power Management System.', '238W1A0477', 'Harsha Vardhan', 100000.00, 'Ministry of Education & Dr. K. Venkatesh (Lab Incharge / Sir)', '2026-03-20', true, '2026-03-20 10:00:00+05:30'),
   ('ACH-002', '1st Place - National Drone Innovation Challenge', 'Awarded first place for autonomous edge AI disease detection in aerial drones.', '238W1A0412', 'Kavya Sharma', 50000.00, 'IEEE Robotics & Automation Society', '2026-02-15', true, '2026-02-15 10:00:00+05:30')
 ON CONFLICT (id) DO NOTHING;
 
