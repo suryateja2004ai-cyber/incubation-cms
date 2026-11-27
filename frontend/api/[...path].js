@@ -329,6 +329,54 @@ export default async function handler(req, res) {
     if (pathname === '/api/auth/users' && req.method === 'GET') {
       if (!process.env.DATABASE_URL) return res.status(200).json({ success: true, users: [] });
       const sql = getDb();
+
+      // 1. Ensure Harsha Vardhan has correct authentic identity
+      await sql`
+        UPDATE public.passwords
+        SET student_name = 'Harsha Vardhan', email = '238w1a0477@vrsec.ac.in', department = 'ECE', updated_at = NOW()
+        WHERE UPPER(TRIM(roll_number)) = '238W1A0477' AND (student_name IS NULL OR student_name != 'Harsha Vardhan');
+      `;
+      await sql`
+        UPDATE public.student_face_embeddings
+        SET student_name = 'Harsha Vardhan'
+        WHERE UPPER(TRIM(roll_number)) = '238W1A0477' AND (student_name IS NULL OR student_name != 'Harsha Vardhan');
+      `;
+
+      // 2. Auto-provision any student registered in biometrics (e.g. Hema Priya 238W1A0481) into passwords
+      const missingInPasswords = await sql`
+        SELECT DISTINCT f.roll_number, f.student_name
+        FROM public.student_face_embeddings f
+        WHERE NOT EXISTS (
+          SELECT 1 FROM public.passwords p WHERE UPPER(TRIM(p.roll_number)) = UPPER(TRIM(f.roll_number))
+        );
+      `;
+
+      for (const student of missingInPasswords) {
+        const cleanRoll = String(student.roll_number).trim().toUpperCase();
+        const cleanName = student.student_name && student.student_name !== 'Unknown Person' ? student.student_name : `Student ${cleanRoll}`;
+        await sql`
+          INSERT INTO public.passwords (
+            roll_number, password, student_name, role, department, 
+            phone_number, email, created_at, updated_at, academic_year_at_start, 
+            incubation_start_date, retention_period_years, retention_end_date
+          ) VALUES (
+            ${cleanRoll},
+            'student123',
+            ${cleanName},
+            'student',
+            'ECE',
+            '9876543213',
+            ${cleanRoll.toLowerCase() + '@vrsec.ac.in'},
+            NOW(),
+            NOW(),
+            1,
+            CURRENT_DATE,
+            4,
+            CURRENT_DATE + INTERVAL '4 years'
+          );
+        `;
+      }
+
       const rows = await sql`
         SELECT 
           p.id, p.roll_number, p.student_name, p.student_name as name, 
@@ -350,6 +398,54 @@ export default async function handler(req, res) {
     if (pathname === '/api/auth/all-accounts' && req.method === 'GET') {
       if (!process.env.DATABASE_URL) return res.status(200).json({ success: true, accounts: [] });
       const sql = getDb();
+
+      // Ensure Harsha Vardhan has correct authentic identity
+      await sql`
+        UPDATE public.passwords
+        SET student_name = 'Harsha Vardhan', email = '238w1a0477@vrsec.ac.in', department = 'ECE', updated_at = NOW()
+        WHERE UPPER(TRIM(roll_number)) = '238W1A0477' AND (student_name IS NULL OR student_name != 'Harsha Vardhan');
+      `;
+      await sql`
+        UPDATE public.student_face_embeddings
+        SET student_name = 'Harsha Vardhan'
+        WHERE UPPER(TRIM(roll_number)) = '238W1A0477' AND (student_name IS NULL OR student_name != 'Harsha Vardhan');
+      `;
+
+      // Auto-provision any student registered in biometrics (e.g. Hema Priya 238W1A0481) into passwords
+      const missingInPasswords = await sql`
+        SELECT DISTINCT f.roll_number, f.student_name
+        FROM public.student_face_embeddings f
+        WHERE NOT EXISTS (
+          SELECT 1 FROM public.passwords p WHERE UPPER(TRIM(p.roll_number)) = UPPER(TRIM(f.roll_number))
+        );
+      `;
+
+      for (const student of missingInPasswords) {
+        const cleanRoll = String(student.roll_number).trim().toUpperCase();
+        const cleanName = student.student_name && student.student_name !== 'Unknown Person' ? student.student_name : `Student ${cleanRoll}`;
+        await sql`
+          INSERT INTO public.passwords (
+            roll_number, password, student_name, role, department, 
+            phone_number, email, created_at, updated_at, academic_year_at_start, 
+            incubation_start_date, retention_period_years, retention_end_date
+          ) VALUES (
+            ${cleanRoll},
+            'student123',
+            ${cleanName},
+            'student',
+            'ECE',
+            '9876543213',
+            ${cleanRoll.toLowerCase() + '@vrsec.ac.in'},
+            NOW(),
+            NOW(),
+            1,
+            CURRENT_DATE,
+            4,
+            CURRENT_DATE + INTERVAL '4 years'
+          );
+        `;
+      }
+
       const rows = await sql`
         SELECT 
           p.id, p.roll_number, p.student_name, p.student_name as name, 
@@ -378,6 +474,65 @@ export default async function handler(req, res) {
         ORDER BY created_at DESC;
       `;
       return res.status(200).json({ success: true, embeddings: rows });
+    }
+
+    if (pathname === '/api/data') {
+      if (!process.env.DATABASE_URL) return res.status(200).json({ success: true, data: [] });
+      const sql = getDb();
+      const action = url.searchParams.get('action');
+      const tableParam = url.searchParams.get('table');
+
+      if (action === 'reconcile') {
+        await sql`
+          UPDATE public.passwords
+          SET student_name = 'Harsha Vardhan', email = '238w1a0477@vrsec.ac.in', department = 'ECE', updated_at = NOW()
+          WHERE UPPER(TRIM(roll_number)) = '238W1A0477';
+        `;
+        const hemaCheck = await sql`SELECT id FROM public.passwords WHERE UPPER(TRIM(roll_number)) = '238W1A0481';`;
+        if (!hemaCheck || hemaCheck.length === 0) {
+          await sql`
+            INSERT INTO public.passwords (
+              roll_number, password, student_name, role, department, 
+              phone_number, email, created_at, updated_at, academic_year_at_start, 
+              incubation_start_date, retention_period_years, retention_end_date
+            ) VALUES (
+              '238W1A0481', 'student123', 'Hema Priya', 'student', 'ECE',
+              '9876543213', '238w1a0481@vrsec.ac.in', NOW(), NOW(), 1, CURRENT_DATE, 4, CURRENT_DATE + INTERVAL '4 years'
+            );
+          `;
+        }
+        await sql`
+          UPDATE public.student_face_embeddings
+          SET student_name = 'Harsha Vardhan'
+          WHERE UPPER(TRIM(roll_number)) = '238W1A0477';
+        `;
+        await sql`
+          UPDATE public.student_face_embeddings
+          SET student_name = 'Hema Priya'
+          WHERE UPPER(TRIM(roll_number)) = '238W1A0481';
+        `;
+        return res.status(200).json({ success: true, message: 'Reconciled' });
+      }
+
+      if (req.method === 'GET') {
+        const rows = await sql`
+          SELECT 
+            p.id, p.roll_number, p.student_name, p.student_name as name, 
+            p.email, p.role, p.department, p.phone_number, p.phone_number as mobile_number,
+            p.academic_year_at_start, p.incubation_start_date, p.retention_period_years, p.retention_end_date,
+            p.created_at, p.updated_at,
+            (f.id IS NOT NULL) as face_registered
+          FROM public.passwords p
+          LEFT JOIN (
+            SELECT DISTINCT ON (UPPER(TRIM(roll_number))) roll_number, id
+            FROM public.student_face_embeddings
+          ) f ON UPPER(TRIM(p.roll_number)) = UPPER(TRIM(f.roll_number))
+          ORDER BY p.id ASC;
+        `;
+        return res.status(200).json({ success: true, data: rows });
+      }
+
+      return res.status(200).json({ success: true });
     }
 
     // Default 404
