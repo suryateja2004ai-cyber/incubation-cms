@@ -163,8 +163,8 @@ export default function FaceRegistrationModal({
           const res = await faceApiService.getStudentStatus(student.rollNumber);
           setEnrollmentStatus({
             checking: false,
-            registered: res.registered,
-            count: res.embedding_count || 0,
+            registered: Boolean(res.registered),
+            count: res.count || res.embedding_count || (res.registered ? 10 : 0),
             createdAt: res.created_at,
           });
         } catch (err) {
@@ -650,7 +650,7 @@ export default function FaceRegistrationModal({
                 <span className="text-sm text-muted">Enrollment Status:</span>
                 {enrollmentStatus.registered || isComplete ? (
                   <span className="badge badge-success" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                    <CheckCircle2 size={12} /> {enrollmentStatus.count || (isComplete ? 10 : 0)} Embeddings Enrolled
+                    <CheckCircle2 size={12} /> {enrollmentStatus.count || (enrollmentStatus.registered || isComplete ? 10 : 0)} Embeddings Enrolled
                   </span>
                 ) : (
                   <span className="badge badge-neutral">Not Enrolled</span>

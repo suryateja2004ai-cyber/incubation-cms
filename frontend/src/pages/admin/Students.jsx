@@ -237,14 +237,19 @@ export default function Students({
 
     try {
       const res = await faceApiService.getStudents();
-      if (res && res.students) {
-        const enrolled = new Set(
-          res.students
-            .filter((s) => (s.embedding_count || 0) >= 10)
-            .map((s) => s.roll_number.toUpperCase())
-        );
-        setVerifiedFaceRolls(enrolled);
-      }
+      const list = Array.isArray(res) ? res : (res?.students || []);
+      const enrolled = new Set(
+        list
+          .map((s) => (s.roll_number || s.rollNumber || '').toUpperCase())
+          .filter(Boolean)
+      );
+      // Ensure any user marked with faceRegistered is also in enrolled set
+      (getAllUsers() || []).forEach((u) => {
+        if (u.faceRegistered) {
+          enrolled.add((u.rollNumber || u.username || '').toUpperCase());
+        }
+      });
+      setVerifiedFaceRolls(enrolled);
     } catch (e) {
       // offline/fallback
     }

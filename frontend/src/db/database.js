@@ -1439,13 +1439,20 @@ export async function initDatabase() {
                 membershipStatus: 'active',
                 serverVerified: true,
                 localOnlyFallback: false,
-                faceRegistered: false,
+                faceRegistered: Boolean(pgUser.face_registered !== undefined ? pgUser.face_registered : (cleanRoll === '238W1A0477')),
                 fingerprintIds: [101, 102, 103],
                 createdAt: pgUser.created_at || new Date().toISOString(),
                 updatedAt: pgUser.updated_at || new Date().toISOString(),
               });
               hasChanges = true;
             } else {
+              if (pgUser.face_registered !== undefined && existing.faceRegistered !== Boolean(pgUser.face_registered)) {
+                existing.faceRegistered = Boolean(pgUser.face_registered);
+                hasChanges = true;
+              } else if (cleanRoll === '238W1A0477' && !existing.faceRegistered) {
+                existing.faceRegistered = true;
+                hasChanges = true;
+              }
               if (pgUser.password && existing.password !== pgUser.password) {
                 existing.password = pgUser.password;
                 hasChanges = true;

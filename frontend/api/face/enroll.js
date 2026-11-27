@@ -1,6 +1,6 @@
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -34,19 +34,18 @@ export default async function handler(req, res) {
           updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         );
       `;
-      await sql`
-        CREATE INDEX IF NOT EXISTS idx_student_face_roll ON public.student_face_embeddings(roll_number);
-      `;
 
       // Atomic replace or insert
       const recordId = 'FACE-' + cleanRoll;
+      const vectorData = JSON.stringify(embedding_vector || []);
+
       await sql`
         INSERT INTO public.student_face_embeddings (id, roll_number, student_name, embedding_vector, created_at, updated_at)
         VALUES (
           ${recordId},
           ${cleanRoll},
           ${student_name || cleanRoll},
-          ${JSON.stringify(embedding_vector || [])}::jsonb,
+          ${vectorData}::jsonb,
           NOW(),
           NOW()
         )
@@ -55,10 +54,17 @@ export default async function handler(req, res) {
           embedding_vector = EXCLUDED.embedding_vector,
           updated_at = NOW();
       `;
+
+      return res.status(200).json({
+        success: true,
+        message: `Face enrolled in cloud biometrics for ${cleanRoll}`,
+        roll_number: cleanRoll,
+      });
     } catch (err) {
       console.error('Neon Enroll Error:', err);
+      return res.status(500).json({ success: false, error: err.message });
     }
   }
 
-  return res.status(200).json({ success: true, message: `Face enrolled in cloud biometrics for ${cleanRoll}` });
+  return res.status(200).json({ success: true, message: `Face enrolled locally for ${cleanRoll}` });
 }
